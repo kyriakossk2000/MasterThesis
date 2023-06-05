@@ -10,7 +10,7 @@ class Model():
         self.neg = tf.keras.Input(shape=(args.maxlen,), dtype=tf.int32)
         pos = self.pos
         neg = self.neg
-        mask = tf.expand_dims(tf.to_float(tf.not_equal(self.input_seq, 0)), -1)
+        mask = tf.expand_dims(tf.cast(tf.not_equal(self.input_seq, 0), tf.float32), -1)
 
         with tf.variable_scope("SASRec", reuse=reuse):
             # sequence embedding, item embedding table
