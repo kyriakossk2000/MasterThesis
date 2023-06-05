@@ -33,7 +33,7 @@ export DATASET_DIR=${TMP}/datasets/
 # Activate the relevant virtual environment:
 
 
-source /lustre/${STUDENT_ID}/miniconda3/bin/activate mscproject
+source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 cd ..
 
 python main.py --device=cuda --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2
