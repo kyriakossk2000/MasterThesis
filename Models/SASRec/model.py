@@ -4,10 +4,10 @@ from modules import *
 class Model():
     def __init__(self, usernum, itemnum, args, reuse=None):
         self.is_training = tf.Variable(False, dtype=tf.bool, trainable=False)
-        self.u = tf.placeholder(tf.int32, shape=(None))
-        self.input_seq = tf.placeholder(tf.int32, shape=(None, args.maxlen))
-        self.pos = tf.placeholder(tf.int32, shape=(None, args.maxlen))
-        self.neg = tf.placeholder(tf.int32, shape=(None, args.maxlen))
+        self.u = tf.keras.Input(shape=(), dtype=tf.int32)
+        self.input_seq = tf.keras.Input(shape=(args.maxlen,), dtype=tf.int32)
+        self.pos = tf.keras.Input(shape=(args.maxlen,), dtype=tf.int32)
+        self.neg = tf.keras.Input(shape=(args.maxlen,), dtype=tf.int32)
         pos = self.pos
         neg = self.neg
         mask = tf.expand_dims(tf.to_float(tf.not_equal(self.input_seq, 0)), -1)
