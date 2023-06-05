@@ -43,10 +43,10 @@ for u in user_train:
 print('average sequence length: %.2f' % (cc / len(user_train)))
 
 f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-config = tf.ConfigProto()
+config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 config.allow_soft_placement = True
-sess = tf.Session(config=config)
+sess = tf.compat.v1.Session(config=config)
 
 sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
 model = Model(usernum, itemnum, args)
