@@ -3,7 +3,7 @@ from modules import *
 
 class Model():
     def __init__(self, usernum, itemnum, args, reuse=None):
-        self.is_training = tf.placeholder(tf.bool, shape=())
+        self.is_training = tf.Variable(False, dtype=tf.bool, trainable=False)
         self.u = tf.placeholder(tf.int32, shape=(None))
         self.input_seq = tf.placeholder(tf.int32, shape=(None, args.maxlen))
         self.pos = tf.placeholder(tf.int32, shape=(None, args.maxlen))
