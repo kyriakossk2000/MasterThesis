@@ -35,4 +35,5 @@ export DATASET_DIR=${TMP}/datasets/
 
 source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 
-python main.py --device=cuda --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2
+#python main.py --device=cuda --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2
+python main.py --device=cuda --dataset=Video --train_dir=default
