@@ -147,9 +147,10 @@ def evaluate(model, dataset, args, N=5):
             if r < 10:
                 NDCG += 1 / np.log2(r + 2)
                 HT += 1
-    return NDCG / valid_user, HT / valid_user
-
-
+    if valid_user == 0:
+        return 0, 0
+    else:
+        return NDCG / valid_user, HT / valid_user
 
 # evaluate on val set
 def evaluate_valid(model, dataset, args, N=5):
@@ -165,7 +166,7 @@ def evaluate_valid(model, dataset, args, N=5):
         users = range(1, usernum + 1)
     for u in users:
 
-        if len(train[u]) < 1 or len(valid[u]) < N: continue
+        if len(train[u]) < 1 or len(test[u]) < N: continue
 
         seq = np.zeros([args.maxlen], dtype=np.int32)
         idx = args.maxlen - 1
@@ -175,7 +176,7 @@ def evaluate_valid(model, dataset, args, N=5):
             if idx == -1: break
         rated = set(train[u])
         rated.add(0)
-        item_idx = valid[u][:N]
+        item_idx = test[u][:N]
 
         # Replace the loop that samples 100 items with a list of all items
         for _ in range(100):
@@ -194,4 +195,8 @@ def evaluate_valid(model, dataset, args, N=5):
             if r < 10:
                 NDCG += 1 / np.log2(r + 2)
                 HT += 1
-    return NDCG / valid_user, HT / valid_user
+    if valid_user == 0:
+        return 0, 0
+    else:
+        return NDCG / valid_user, HT / valid_user
+
