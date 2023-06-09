@@ -58,8 +58,6 @@ class SASRec(torch.nn.Module):
             new_fwd_layer = PointWiseFeedForward(args.hidden_units, args.dropout_rate)
             self.forward_layers.append(new_fwd_layer)
 
-            # self.pos_sigmoid = torch.nn.Sigmoid()
-            # self.neg_sigmoid = torch.nn.Sigmoid()
 
     def log2feats(self, log_seqs):
         seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.dev))
@@ -100,9 +98,6 @@ class SASRec(torch.nn.Module):
 
         pos_logits = (log_feats * pos_embs).sum(dim=-1)
         neg_logits = (log_feats * neg_embs).sum(dim=-1)
-
-        # pos_pred = self.pos_sigmoid(pos_logits)
-        # neg_pred = self.neg_sigmoid(neg_logits)
 
         return pos_logits, neg_logits # pos_pred, neg_pred
 
