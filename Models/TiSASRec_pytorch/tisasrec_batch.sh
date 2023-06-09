@@ -35,4 +35,5 @@ export DATASET_DIR=${TMP}/datasets/
 
 source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 
-python main.py --dataset=ml-1m --train_dir=default --device=cuda
+#python main.py --dataset=ml-1m --train_dir=default --device=cuda
+python main.py --dataset=ml-1m --train_dir=default --device=cpu --inference_only=true --state_dict_path=ml-1m_default/TiSASRec.epoch\=201.lr\=0.001.layer\=2.head\=1.hidden\=50.maxlen\=50.pth
