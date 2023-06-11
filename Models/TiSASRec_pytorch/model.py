@@ -21,7 +21,6 @@ class PointWiseFeedForward(torch.nn.Module):
         outputs += inputs
         return outputs
 
-
 class TimeAwareMultiHeadAttention(torch.nn.Module):
     # required homebrewed mha layer for Ti/SASRec experiments
     def __init__(self, hidden_size, head_num, dropout_rate, dev):
