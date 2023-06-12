@@ -26,9 +26,10 @@ parser.add_argument('--l2_emb', default=0.0, type=float)
 parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
-parser.add_argument('--window_size', default=1, type=int)       # window size of how many elements in the future 
-parser.add_argument('--window_size_eval', default=1, type=int)  # evaluate in the k position in the future 
-parser.add_argument('--k_future_item_for_eval', default=1, type=int)  # evaluate in the k position in the future
+parser.add_argument('--window_split', default=False, type=str2bool)       # window prediction or not
+parser.add_argument('--window_size', default=1, type=int)                # window size
+parser.add_argument('--window_eval', default=False, type=str2bool)       # window evaluation or not
+parser.add_argument('--window_eval_size', default=1, type=int)  # evaluate in the k position in the future 
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -40,23 +41,18 @@ f.close()
 if __name__ == '__main__':
     # load dataset'
     # Use original data partition
-    if args.window_size == 1:
-        dataset = data_partition(args.dataset)
-        dataset = data_partition(args.dataset)
-        user_id = 1
-        [user_train, user_valid, user_test, usernum, itemnum] = dataset
-        print("Original: ")
-        print("Train: ", user_train[user_id])
-        print("Valid: ", user_valid[user_id])
-        print("Test: ", user_test[user_id])
+    
+    dataset = data_partition(args.dataset)
+    user_id = 1
+    [user_train, user_valid, user_test, usernum, itemnum] = dataset
     # Use window data partition
-    else:
-        dataset_window = data_partition_window(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+    dataset_window = data_partition_window(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+    if args.window_split:
+        print("Window size: " + str(args.window_size))
         user_id = 1000
-        [user_train, user_valid, user_test, usernum, itemnum] = dataset_window
-        print("Window: " + str(args.window_size))
+        [user_train, train_seq, user_valid_window, user_test_window, usernum, itemnum_window] = dataset_window
         # Print first few training sequences for any user
-        print("Train: num of data in train set: " + str(len(user_train)))
+        print("Number of data in train set: " + str(len(user_train)))
         count = 0
         for key, seq in user_train.items():
             print(f"Key: {key}, Sequence: {seq}")
@@ -64,10 +60,19 @@ if __name__ == '__main__':
             if count >= 3:  # Change this to print more or fewer sequences
                 break
         user_id = 1  # Change this to the ID of the user you want to print data for
-        print(f"Valid for user {user_id}: ", user_valid.get(user_id, []))  # Print validation and test data for a specific user
-        print(f"Test for user {user_id}: ", user_test.get(user_id, []))
-        print("Number of sequences created: ", usernum)
+        print(f"Valid for user {user_id}: ", user_valid_window.get(user_id, []))  # Print validation and test data for a specific user
+        print(f"Test for user {user_id}: ", user_test_window.get(user_id, []))
         print("Itemnum: ", itemnum)
+    else:
+        print("Number of data in train set: " + str(len(user_train)))
+        count = 0
+        for key, seq in user_train.items():
+            print(f"Key: {key}, Sequence: {seq}")
+            count += 1
+            if count >= 3:  # Change this to print more or fewer sequences
+                break
+        print("Number of data in valid set: " + str(len(user_valid)))
+        print("Number of data in test set: " + str(len(user_test)))
     num_batch = len(user_train) // args.batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
     cc = 0.0
     for u in user_train:
@@ -101,9 +106,24 @@ if __name__ == '__main__':
     
     if args.inference_only:
         model.eval()
-        t_test = evaluate(model, dataset, args)
-        print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
-    
+        if not args.window_eval: 
+            t_test = evaluate(model, dataset, args)
+            print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
+        else:
+            print('Evaluating with window ' + str(args.window_eval_size) + '\n')
+            t_test = evaluate_window(model, dataset, args, dataset_window)
+            t_test_NDCG, t_test_HR = t_test  # assuming t_test is the returned tuple from the function
+
+            # print table headers
+            print('\n')
+            print('{:<10}{:<10}{:<10}'.format("Position", "Test_NDCG", "Test_HR"))
+            for position in range(len(t_test_NDCG)):
+                print('{:<10}{:<10.4f}{:<10.4f}'.format(
+                    position + 1,
+                    t_test_NDCG[position],
+                    t_test_HR[position],
+                ))
+
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     bce_criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
@@ -133,32 +153,30 @@ if __name__ == '__main__':
             model.eval()
             t1 = time.time() - t0
             T += t1
-            if args.window_size == 1:
+            if not args.window_eval:
                 print('Evaluating Simple', end='')
                 t_test = evaluate(model, dataset, args)
                 t_valid = evaluate_valid(model, dataset, args)
                 print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
                         % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
             else:
-                print('Evaluating with window ' + str(args.window_size_eval), end='')
-                k_future_item = args.k_future_item_for_eval
-                t_test = evaluate_window(model, dataset, args, k_future_item=k_future_item)
-                t_valid = evaluate_valid_window(model, dataset, args, k_future_item=k_future_item)
-                # Extracting the metrics
-                recall_valid, ndcg_valid, hitrate_valid = t_valid
-                recall_test, ndcg_test, hitrate_test = t_test
-                # Printing the metrics
-                print('epoch: {}, time: {:.2f}(s), '.format(epoch, T))
-                print('Valid Recall (next item: {:.4f}, {}-th item: {:.4f}), NDCG (next item: {:.4f}, {}-th item: {:.4f}), Hit Rate (next item: {:.4f}, {}-th item: {:.4f})'.format(
-                    recall_valid[1], k_future_item, recall_valid[k_future_item],
-                    ndcg_valid[1], k_future_item, ndcg_valid[k_future_item],
-                    hitrate_valid[1], k_future_item, hitrate_valid[k_future_item]
-                ))
-                print('Test Recall (next item: {:.4f}, {}-th item: {:.4f}), NDCG (next item: {:.4f}, {}-th item: {:.4f}), Hit Rate (next item: {:.4f}, {}-th item: {:.4f})'.format(
-                    recall_test[1], k_future_item, recall_test[k_future_item],
-                    ndcg_test[1], k_future_item, ndcg_test[k_future_item],
-                    hitrate_test[1], k_future_item, hitrate_test[k_future_item]
-                ))
+                print('Evaluating with window ' + str(args.window_eval_size) + '\n')
+                t_test = evaluate_window(model, dataset, args, dataset_window)
+                t_valid = evaluate_valid_window(model, dataset, args, dataset_window)
+                t_test_NDCG, t_test_HR, t_test_Recall = t_test 
+                t_valid_NDCG, t_valid_HR, t_valid_Recall = t_valid  
+                # print table headers
+                print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position", "Test_NDCG", "Test_HR", "Valid_NDCG", "Valid_HR"))
+
+                for position in range(len(t_test_NDCG)):
+                    print('{:<10d}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
+                        position + 1,
+                        t_test_NDCG[position],
+                        t_test_HR[position],
+                        t_valid_NDCG[position],
+                        t_valid_HR[position],
+                    ))
+                
     
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()

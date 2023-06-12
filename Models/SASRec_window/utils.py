@@ -203,6 +203,7 @@ def data_partition_window(fname, window_size=7, target_seq_percentage=0.9):
     itemnum = 0
     User = defaultdict(list)
     user_train = {}
+    user_train_seq = {}
     user_valid = {}
     user_test = {}
     # assume user/item index starting from 1
@@ -224,41 +225,49 @@ def data_partition_window(fname, window_size=7, target_seq_percentage=0.9):
             user_valid[user] = []
             user_test[user] = []
         else:
-            train_seq = User[user][0:len(User[user])-2]  # remove last two items from train set
-            target_split = int(target_seq_percentage * len(train_seq))  # split train set into input and target sequences
+            seq_len = len(User[user]) - 2  # exclude the last two elements from the sequence
+            valid_index = int(seq_len * 0.8)  # index that corresponds to approximately 80% of the sequence length
+            test_index = int(seq_len * 0.9)
 
-            input_seq, target_seq = train_seq[:target_split], train_seq[target_split:]  # split train set into input and target sequences
+            train_seq = User[user][:valid_index]
+            valid_seq = User[user][valid_index:test_index]
+            test_seq = User[user][test_index:]
+            # splitting training sequence into input and target sequences based on the given target sequence percentage
+            split_index = int(len(train_seq) * target_seq_percentage)
+            input_seq = train_seq[:split_index]  
+            target_seq = train_seq[split_index:]
 
             for single_target in target_seq:
-                temp_input = input_seq.copy() # get all items from input_seq
-                temp_input.append(single_target) # add single target item to input_seq
-                index = index + 1 
-                user_train[index] = temp_input # add to train set
-            
-            user_valid[user] = [User[user][-2]] # add second to last item to valid set
-            user_test[user] = [User[user][-1]] # add last item to test set
-    
+                temp_input = input_seq.copy()
+                temp_input.append(single_target)
+                index += 1
+                user_train[index] = temp_input
+
+            user_train_seq[user] = train_seq
+            user_valid[user] = valid_seq
+            user_test[user] = test_seq
+
     usernum = index
-    return [user_train, user_valid, user_test, usernum, itemnum]
+    return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum]
 
-def evaluate_window(model, dataset, args, k_future_item=7, num_of_samples=500, at_k=10):
+# Evaluate on test set with window
+def evaluate_window(model, dataset, args, dataset_window, k=7):
     [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
 
-    # Metrics accumulators
-    NDCG = {1: 0.0, k_future_item: 0.0}
-    Recall = {1: 0.0, k_future_item: 0.0}
-    HitRate = {1: 0.0, k_future_item: 0.0}
+    NDCG = [0.0] * k
+    HT = [0.0] * k
     valid_user = 0.0
-
-    # Sampling items for negative samples
-    random_items = random.sample(range(1, itemnum + 1), num_of_samples)
-    sample_idx = random_items
-    users = range(1, usernum + 1)
+    
+    # Limit the number of users evaluated
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(valid[u]) < k_future_item: continue
-
-        # Preparing input sequence
+        if len(train[u]) < 1 or len(valid[u]) < k: continue
+        
         seq = np.zeros([args.maxlen], dtype=np.int32)
         idx = args.maxlen - 1
         for i in reversed(train[u]):
@@ -266,75 +275,54 @@ def evaluate_window(model, dataset, args, k_future_item=7, num_of_samples=500, a
             idx -= 1
             if idx == -1: break
 
-        # Ground truth items (next and k-th)
-        ground_truth_idx = valid[u][:k_future_item]
+        rated = set(train[u])
+        rated.add(0)
+        for j in range(k):
+            item_indices = [valid[u][j]]
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
 
-        # Getting predictions
-        process_idx = ground_truth_idx + sample_idx
-        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], process_idx]])[0]
-
-        # Sorting items by score
-        sorted_indices = torch.argsort(predictions)[::-1]
-
-        # Evaluating for both target positions (next and k-th future interaction)
-        for target_pos in [1, k_future_item]:
-            target_item = ground_truth_idx[target_pos-1]
-
-            # Getting the top at_k recommendations
-            top_n_items = torch.tensor(process_idx)[sorted_indices][:at_k]
-
-            # Computing Recall@at_k
-            recall = int(target_item in top_n_items)
-
-            # Computing NDCG@at_k
-            dcg = 0.0
-            for i, item in enumerate(top_n_items, 1):
-                if item == target_item:
-                    dcg += 1 / np.log2(i + 1)
-            ideal_dcg = 1 / np.log2(2)  # Ideal DCG@at_k
-            ndcg = dcg / ideal_dcg if ideal_dcg > 0 else 0
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
             
-            # Computing Hit Rate@at_k
-            hit_rate = int(target_item in top_n_items)
-
-            # Accumulating the metrics
-            Recall[target_pos] += recall
-            NDCG[target_pos] += ndcg
-            HitRate[target_pos] += hit_rate
+            ranks = predictions.argsort().argsort()  # rank items by their scores
+            rank = ranks[0].item()
+            if rank < 10:
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
 
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
 
-    # Averaging
-    for target_pos in [1, k_future_item]:
-        Recall[target_pos] /= valid_user
-        NDCG[target_pos] /= valid_user
-        HitRate[target_pos] /= valid_user
+    # Averaging NDCG and Hit Rate for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
 
-    return Recall, NDCG, HitRate
+    return NDCG, HT
 
 
 # evaluate on valid set window
-def evaluate_valid_window(model, dataset, args, k_future_item=7, num_of_samples=500, at_k=10):
+def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
     [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
 
-    # Metrics accumulators
-    NDCG = {1: 0.0, k_future_item: 0.0}
-    Recall = {1: 0.0, k_future_item: 0.0}
-    HitRate = {1: 0.0, k_future_item: 0.0}
+    NDCG = [0.0] * k
+    HT = [0.0] * k
     valid_user = 0.0
-
-    # Sampling items for negative samples
-    random_items = random.sample(range(1, itemnum + 1), num_of_samples)
-    sample_idx = random_items
-    users = range(1, usernum + 1)
+    
+    # Limit the number of users evaluated
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(valid[u]) < k_future_item: continue
-
-        # Preparing input sequence
+        if len(train[u]) < 1 or len(valid[u]) < k: continue
+        
         seq = np.zeros([args.maxlen], dtype=np.int32)
         idx = args.maxlen - 1
         for i in reversed(train[u]):
@@ -342,51 +330,32 @@ def evaluate_valid_window(model, dataset, args, k_future_item=7, num_of_samples=
             idx -= 1
             if idx == -1: break
 
-        # Ground truth items (next and k-th)
-        ground_truth_idx = valid[u][:k_future_item]
+        rated = set(train[u])
+        rated.add(0)
+        for j in range(k):
+            item_indices = [valid[u][j]]
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
 
-        # Getting predictions
-        process_idx = ground_truth_idx + sample_idx
-        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], process_idx]])[0]
-
-        # Sorting items by score
-        sorted_indices = torch.argsort(predictions)[::-1]
-
-        # Evaluating for both target positions (next and k-th future interaction)
-        for target_pos in [1, k_future_item]:
-            target_item = ground_truth_idx[target_pos-1]
-
-            # Getting the top at_k recommendations
-            top_n_items = torch.tensor(process_idx)[sorted_indices][:at_k]
-
-            # Computing Recall@at_k
-            recall = int(target_item in top_n_items)
-
-            # Computing NDCG@at_k
-            dcg = 0.0
-            for i, item in enumerate(top_n_items, 1):
-                if item == target_item:
-                    dcg += 1 / np.log2(i + 1)
-            ideal_dcg = 1 / np.log2(2)  # Ideal DCG@at_k
-            ndcg = dcg / ideal_dcg if ideal_dcg > 0 else 0
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
             
-            # Computing Hit Rate@at_k
-            hit_rate = int(target_item in top_n_items)
-
-            # Accumulating the metrics
-            Recall[target_pos] += recall
-            NDCG[target_pos] += ndcg
-            HitRate[target_pos] += hit_rate
+            ranks = predictions.argsort().argsort()  # rank items by their scores
+            rank = ranks[0].item()
+            if rank < 10:
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
 
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
 
-    # Averaging
-    for target_pos in [1, k_future_item]:
-        Recall[target_pos] /= valid_user
-        NDCG[target_pos] /= valid_user
-        HitRate[target_pos] /= valid_user
+    # Averaging NDCG and Hit Rate for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
 
-    return Recall, NDCG, HitRate
+    return NDCG, HT
+

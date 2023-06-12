@@ -37,4 +37,5 @@ source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 
 #python main.py --device=cuda --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2
 #python main.py --device=cuda --dataset=Video --train_dir=default
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_size=7 --k_future_item_for_eval=7 --device=cuda
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=false --window_eval=true --device=cuda
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=true --window_eval=true --device=cuda
