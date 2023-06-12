@@ -266,11 +266,11 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
         users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(valid[u]) < k: continue
+        if len(train[u]) < 1 or len(test[u]) < k: continue
         
         seq = np.zeros([args.maxlen], dtype=np.int32)
         idx = args.maxlen - 1
-        for i in reversed(train[u]):
+        for i in reversed(train[u] + valid[u]):
             seq[idx] = i
             idx -= 1
             if idx == -1: break
@@ -278,7 +278,7 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
         rated = set(train[u])
         rated.add(0)
         for j in range(k):
-            item_indices = [valid[u][j]]
+            item_indices = [test[u][j]]
             for _ in range(99):
                 t = np.random.randint(1, itemnum + 1)
                 while t in rated: t = np.random.randint(1, itemnum + 1)
