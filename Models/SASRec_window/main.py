@@ -26,7 +26,9 @@ parser.add_argument('--l2_emb', default=0.0, type=float)
 parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
-parser.add_argument('--window_size', default=1, type=int)
+parser.add_argument('--window_size', default=1, type=int)       # window size of how many elements in the future 
+parser.add_argument('--window_size_eval', default=1, type=int)  # evaluate in the k position in the future 
+parser.add_argument('--k_future_item_for_eval', default=1, type=int)  # evaluate in the k position in the future
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -36,18 +38,8 @@ with open(os.path.join(args.dataset + '_' + args.train_dir, 'args.txt'), 'w') as
 f.close()
 
 if __name__ == '__main__':
-    # load dataset
-    '''
-    # In the original implementation:
-    The training set consists of all items except the last two.
-    The validation set has the second to last item.
-    The test set has the last item.
-
-    # In the window-based implementation with a window size of 7:
-    The training set consists of all items except the last 14.
-    The validation set consists of the next 7 items.
-    The test set consists of the last 7 items.
-    '''
+    # load dataset'
+    # Use original data partition
     if args.window_size == 1:
         dataset = data_partition(args.dataset)
         dataset = data_partition(args.dataset)
@@ -57,18 +49,25 @@ if __name__ == '__main__':
         print("Train: ", user_train[user_id])
         print("Valid: ", user_valid[user_id])
         print("Test: ", user_test[user_id])
+    # Use window data partition
     else:
-        dataset_window = data_partition_window(args.dataset, window_size=args.window_size)
-        user_id = 1
+        dataset_window = data_partition_window(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+        user_id = 1000
         [user_train, user_valid, user_test, usernum, itemnum] = dataset_window
-        print("Window: ")
-        print("Train: ", user_train[user_id])
-        print("Valid: ", user_valid[user_id])
-        print("Test: ", user_test[user_id])
-
-    print("Usernum: ", usernum)
-    print("Itemnum: ", itemnum)
-    #exit()
+        print("Window: " + str(args.window_size))
+        # Print first few training sequences for any user
+        print("Train: num of data in train set: " + str(len(user_train)))
+        count = 0
+        for key, seq in user_train.items():
+            print(f"Key: {key}, Sequence: {seq}")
+            count += 1
+            if count >= 3:  # Change this to print more or fewer sequences
+                break
+        user_id = 1  # Change this to the ID of the user you want to print data for
+        print(f"Valid for user {user_id}: ", user_valid.get(user_id, []))  # Print validation and test data for a specific user
+        print(f"Test for user {user_id}: ", user_test.get(user_id, []))
+        print("Number of sequences created: ", usernum)
+        print("Itemnum: ", itemnum)
     num_batch = len(user_train) // args.batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
     cc = 0.0
     for u in user_train:
@@ -86,9 +85,6 @@ if __name__ == '__main__':
         except:
             pass # just ignore those failed init layers
     
-    # this fails embedding init 'Embedding' object has no attribute 'dim'
-    # model.apply(torch.nn.init.xavier_uniform_)
-    
     model.train() # enable model training
     
     epoch_start_idx = 1
@@ -101,8 +97,7 @@ if __name__ == '__main__':
             print('failed loading state_dicts, pls check file path: ', end="")
             print(args.state_dict_path)
             print('pdb enabled for your quick check, pls type exit() if you do not need it')
-            import pdb; pdb.set_trace()
-            
+            import pdb; pdb.set_trace()       
     
     if args.inference_only:
         model.eval()
@@ -138,11 +133,32 @@ if __name__ == '__main__':
             model.eval()
             t1 = time.time() - t0
             T += t1
-            print('Evaluating', end='')
-            t_test = evaluate(model, dataset, args)
-            t_valid = evaluate_valid(model, dataset, args)
-            print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
-                    % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
+            if args.window_size == 1:
+                print('Evaluating Simple', end='')
+                t_test = evaluate(model, dataset, args)
+                t_valid = evaluate_valid(model, dataset, args)
+                print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
+                        % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
+            else:
+                print('Evaluating with window ' + str(args.window_size_eval), end='')
+                k_future_item = args.k_future_item_for_eval
+                t_test = evaluate_window(model, dataset, args, k_future_item=k_future_item)
+                t_valid = evaluate_valid_window(model, dataset, args, k_future_item=k_future_item)
+                # Extracting the metrics
+                recall_valid, ndcg_valid, hitrate_valid = t_valid
+                recall_test, ndcg_test, hitrate_test = t_test
+                # Printing the metrics
+                print('epoch: {}, time: {:.2f}(s), '.format(epoch, T))
+                print('Valid Recall (next item: {:.4f}, {}-th item: {:.4f}), NDCG (next item: {:.4f}, {}-th item: {:.4f}), Hit Rate (next item: {:.4f}, {}-th item: {:.4f})'.format(
+                    recall_valid[1], k_future_item, recall_valid[k_future_item],
+                    ndcg_valid[1], k_future_item, ndcg_valid[k_future_item],
+                    hitrate_valid[1], k_future_item, hitrate_valid[k_future_item]
+                ))
+                print('Test Recall (next item: {:.4f}, {}-th item: {:.4f}), NDCG (next item: {:.4f}, {}-th item: {:.4f}), Hit Rate (next item: {:.4f}, {}-th item: {:.4f})'.format(
+                    recall_test[1], k_future_item, recall_test[k_future_item],
+                    ndcg_test[1], k_future_item, ndcg_test[k_future_item],
+                    hitrate_test[1], k_future_item, hitrate_test[k_future_item]
+                ))
     
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()
