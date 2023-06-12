@@ -163,8 +163,8 @@ if __name__ == '__main__':
                 print('Evaluating with window ' + str(args.window_eval_size) + '\n')
                 t_test = evaluate_window(model, dataset, args, dataset_window)
                 t_valid = evaluate_valid_window(model, dataset, args, dataset_window)
-                t_test_NDCG, t_test_HR, t_test_Recall = t_test 
-                t_valid_NDCG, t_valid_HR, t_valid_Recall = t_valid  
+                t_test_NDCG, t_test_HR = t_test 
+                t_valid_NDCG, t_valid_HR = t_valid  
                 # print table headers
                 print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position", "Test_NDCG", "Test_HR", "Valid_NDCG", "Valid_HR"))
 
