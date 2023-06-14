@@ -2,6 +2,7 @@ import sys
 import copy
 import torch
 import random
+import statistics
 import numpy as np
 from collections import defaultdict
 from multiprocessing import Process, Queue
@@ -197,8 +198,45 @@ def evaluate_valid(model, dataset, args):
 
     return NDCG / valid_user, HT / valid_user
 
-# -------- SASRec with Window ---------- #
-def data_partition_window(fname, window_size=7, target_seq_percentage=0.9):
+# -------- SASRec with window ---------- #
+def data_partition_window(fname):
+    usernum = 0
+    itemnum = 0
+    User = defaultdict(list)
+    user_train = {}
+    user_valid = {}
+    user_test = {}
+    # assume user/item index starting from 1
+    f = open('data/%s.txt' % fname, 'r')
+    for line in f:
+        u, i = line.rstrip().split(' ')
+        u = int(u)
+        i = int(i)
+        usernum = max(u, usernum)
+        itemnum = max(i, itemnum)
+        User[u].append(i)
+    # create partitions
+    for user in User:
+        nfeedback = len(User[user])
+        
+        if nfeedback < 3:
+            user_train[user] = User[user]
+            user_valid[user] = []
+            user_test[user] = []
+        else:
+            seq_len = len(User[user]) - 2  # exclude the last two elements from the sequence
+            valid_index = int(seq_len * 0.8)  # index that corresponds to approximately 80% of the sequence length
+            test_index = int(seq_len * 0.9)
+
+            # Only the input sequences without target sequences
+            user_train[user] = User[user][:valid_index]
+            user_valid[user] = User[user][valid_index:test_index]
+            user_test[user] = User[user][test_index:]
+
+    return [user_train, user_valid, user_test, usernum, itemnum]
+
+# -------- SASRec with Window and Split feed---------- #
+def data_partition_window_split(fname, target_seq_percentage=0.9):
     usernum = 0
     itemnum = 0
     User = defaultdict(list)
@@ -303,7 +341,9 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
     print('count: ', count)
-    return NDCG, HT
+    ndcg_avg = statistics.mean(NDCG)   
+    ht_avg = statistics.mean(HT)
+    return NDCG, HT, ndcg_avg, ht_avg
 
 
 # evaluate on valid set window
@@ -357,6 +397,143 @@ def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
     # Averaging NDCG and Hit Rate for each position
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
+    ndcg_avg = statistics.mean(NDCG)   
+    ht_avg = statistics.mean(HT)
 
-    return NDCG, HT
+    return NDCG, HT, ndcg_avg, ht_avg
 
+def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
+    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
+
+    NDCG = [0.0] * k_future_pos
+    HT = [0.0] * k_future_pos
+    SEQUENCE_SCORE = [0.0] * k_future_pos
+    HT_ORDERED_SCORE = [0.0] * k_future_pos
+    weight_ht, weight_ordering = 0.7, 0.3
+    valid_user = 0.0
+    count = 0
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    for u in users:
+        if len(train[u]) < 1 or len(test[u]) < k_future_pos: continue
+        count += 1
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u] + valid[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u])
+        rated.add(0)
+        for j in range(k_future_pos):
+            item_indices = [test[u][j]]
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
+
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
+            
+            # Ranking and Score calculations
+            ranks = predictions.argsort().argsort()
+            rank = ranks[0].item()
+            
+            # Calculating the Sequence Score
+            if rank < top_N:
+                seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
+                SEQUENCE_SCORE[j] += seq_score
+                
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
+        
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+
+    # Averaging NDCG, Hit Rate and Sequence Score for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
+    print('count: ', count)
+    ndcg_avg = statistics.mean(NDCG)
+    ht_avg = statistics.mean(HT)
+    sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
+    ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
+    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg
+
+def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
+    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
+
+    NDCG = [0.0] * k_future_pos
+    HT = [0.0] * k_future_pos
+    SEQUENCE_SCORE = [0.0] * k_future_pos
+    HT_ORDERED_SCORE = [0.0] * k_future_pos
+    weight_ht, weight_ordering = 0.7, 0.3
+    valid_user = 0.0
+    count = 0
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    for u in users:
+        if len(train[u]) < 1 or len(valid[u]) < k_future_pos: continue
+        count += 1
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u])
+        rated.add(0)
+        for j in range(k_future_pos):
+            item_indices = [valid[u][j]]
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
+
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
+            
+            # Ranking and Score calculations
+            ranks = predictions.argsort().argsort()
+            rank = ranks[0].item()
+            
+            # Calculating the Sequence Score
+            if rank < top_N:
+                seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
+                SEQUENCE_SCORE[j] += seq_score
+                
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
+        
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+
+    # Averaging NDCG, Hit Rate and Sequence Score for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
+    print('count: ', count)
+    ndcg_avg = statistics.mean(NDCG)
+    ht_avg = statistics.mean(HT)
+    sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
+    ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
+    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg

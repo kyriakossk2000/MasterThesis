@@ -41,46 +41,43 @@ f.close()
 if __name__ == '__main__':
     # load dataset'
     # Use original data partition
-    
-    dataset = data_partition(args.dataset)
+    print("Window size: " + str(args.window_size))
+
+    dataset = data_partition_window(args.dataset)
     user_id = 1
     [user_train, user_valid, user_test, usernum, itemnum] = dataset
     # Use window data partition
-    dataset_window = data_partition_window(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+    dataset_window = data_partition_window_split(args.dataset, target_seq_percentage=0.9)
     if args.window_split:
-        print("Window size: " + str(args.window_size))
-        user_id = 1000
         [user_train, train_seq, user_valid_window, user_test_window, usernum, itemnum_window] = dataset_window
-        # Print first few training sequences for any user
-        print("Number of data in train set: " + str(len(user_train)))
+        print("Number of training sequences in train set: " + str(len(user_train.values())))
         count = 0
         for key, seq in user_train.items():
-            print(f"Key: {key}, Sequence: {seq}")
+            print(f"User: {key}, Sequence: {seq}")
+            print(f"Valid for user {key}: ", user_valid_window.get(key, []))  # Print validation and test data for a specific user
+            print(f"Test for user {key}: ", user_test_window.get(key, []))
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        user_id = 1  # Change this to the ID of the user you want to print data for
-        print(f"Valid for user {user_id}: ", user_valid_window.get(user_id, []))  # Print validation and test data for a specific user
-        print(f"Test for user {user_id}: ", user_test_window.get(user_id, []))
         print("Itemnum: ", itemnum)
     else:
-        print("Number of data in train set: " + str(len(user_train)))
+        print("Number of training sequences in train set: " + str(len(user_train.values())))
         count = 0
         for key, seq in user_train.items():
-            print(f"Key: {key}, Sequence: {seq}")
+            print(f"User: {key}, Sequence: {seq}")
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Test for user {key}: ", user_test.get(key, []))
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        print("Number of data in valid set: " + str(len(user_valid)))
-        print("Number of data in test set: " + str(len(user_test)))
+        print("Itemnum: ", itemnum)
     num_batch = len(user_train) // args.batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
     cc = 0.0
     for u in user_train:
         cc += len(user_train[u])
     print('average sequence length: %.2f' % (cc / len(user_train)))
-    
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-    
+    exit(0)
     sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
     model = SASRec(usernum, itemnum, args).to(args.device) # no ReLU activation in original SASRec implementation?
     
@@ -111,17 +108,23 @@ if __name__ == '__main__':
             print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
         else:
             print('Evaluating with window ' + str(args.window_eval_size) + '\n')
-            t_test = evaluate_window(model, dataset, args, dataset_window)
-            t_test_NDCG, t_test_HR = t_test  # assuming t_test is the returned tuple from the function
+            t_test = evaluate_window_new(model, dataset, args, dataset_window) 
+            t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg = t_test
 
             # print table headers
             print('\n')
-            print('{:<10}{:<10}{:<10}'.format("Position", "Test_NDCG", "Test_HR"))
+            print("NDCG@10 Test Average: %.4f" % ndcg_avg)
+            print("HR@10 Test Average: %.4f" % ht_avg)
+            print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)
+            print("HT_Ordered@10 Test Average: %.4f" % ht_ordered_score_avg)
+            print('{:<10}{:<10}{:<10}{:<10}{:<10}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score"))
             for position in range(len(t_test_NDCG)):
-                print('{:<10}{:<10.4f}{:<10.4f}'.format(
+                print('{:<10}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
                     position + 1,
                     t_test_NDCG[position],
                     t_test_HR[position],
+                    t_test_sequence_score[position],
+                    t_test_ht_ordered_score[position]    
                 ))
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
@@ -131,6 +134,7 @@ if __name__ == '__main__':
     
     T = 0.0
     t0 = time.time()
+    start_time = time.time()
     
     for epoch in range(epoch_start_idx, args.num_epochs + 1):
         if args.inference_only: break # just to decrease identition
@@ -161,20 +165,32 @@ if __name__ == '__main__':
                         % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
             else:
                 print('Evaluating with window ' + str(args.window_eval_size) + '\n')
-                t_test = evaluate_window(model, dataset, args, dataset_window)
-                t_valid = evaluate_valid_window(model, dataset, args, dataset_window)
-                t_test_NDCG, t_test_HR = t_test 
-                t_valid_NDCG, t_valid_HR = t_valid  
-                # print table headers
-                print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position", "Test_NDCG", "Test_HR", "Valid_NDCG", "Valid_HR"))
+                t_test = evaluate_window_new(model, dataset, args, dataset_window)
+                t_valid = evaluate_valid_window_new(model, dataset, args, dataset_window)
+                t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg = t_test
+                t_valid_NDCG, t_valid_HR, t_valid_sequence_score, t_valid_ht_ordered_score, valid_ndcg_avg, valid_ht_avg, valid_sequence_score_avg, valid_ht_ordered_score_avg = t_valid
 
+                print("NDCG@10 Test Average: %.4f" % ndcg_avg)
+                print("HR@10 Test Average: %.4f" % ht_avg)
+                print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)
+                print("HT_Ordered@10 Test Average: %.4f" % ht_ordered_score_avg)
+                print("NDCG@10 Valid Average: %.4f" % valid_ndcg_avg)
+                print("HR@10 Valid Average: %.4f" % valid_ht_avg)
+                print("Sequence_Score@10 Valid Average: %.4f" % valid_sequence_score_avg)
+                print("HT_Ordered@10 Valid Average: %.4f" % valid_ht_ordered_score_avg)
+                # print table headers
+                print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score", "Valid_NDCG", "Valid_HR", "Valid_Sequence_Score", "Valid_HT_Ordered_Score", "Valid_HT_Ordered_Score"))
                 for position in range(len(t_test_NDCG)):
-                    print('{:<10d}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
+                    print('{:<10d}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
                         position + 1,
                         t_test_NDCG[position],
                         t_test_HR[position],
+                        t_test_sequence_score[position],
+                        t_test_ht_ordered_score[position],
                         t_valid_NDCG[position],
                         t_valid_HR[position],
+                        t_valid_sequence_score[position],
+                        t_valid_ht_ordered_score[position],                        
                     ))
                 
     
@@ -191,4 +207,7 @@ if __name__ == '__main__':
     
     f.close()
     sampler.close()
+    end_time = time.time()
+    total_time = end_time - start_time
+    print("Execution time: ", total_time, " seconds")
     print("Done")
