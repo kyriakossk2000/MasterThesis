@@ -77,7 +77,7 @@ if __name__ == '__main__':
         cc += len(user_train[u])
     print('average sequence length: %.2f' % (cc / len(user_train)))
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-    exit(0)
+    
     sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
     model = SASRec(usernum, itemnum, args).to(args.device) # no ReLU activation in original SASRec implementation?
     
