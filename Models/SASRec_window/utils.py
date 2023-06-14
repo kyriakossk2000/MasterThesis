@@ -258,7 +258,7 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
     NDCG = [0.0] * k
     HT = [0.0] * k
     valid_user = 0.0
-    
+    count = 0
     # Limit the number of users evaluated
     if usernum > 10000:
         users = random.sample(range(1, usernum + 1), 10000)
@@ -267,6 +267,7 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
 
     for u in users:
         if len(train[u]) < 1 or len(test[u]) < k: continue
+        count += 1
         
         seq = np.zeros([args.maxlen], dtype=np.int32)
         idx = args.maxlen - 1
@@ -301,7 +302,7 @@ def evaluate_window(model, dataset, args, dataset_window, k=7):
     # Averaging NDCG and Hit Rate for each position
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
-
+    print('count: ', count)
     return NDCG, HT
 
 
