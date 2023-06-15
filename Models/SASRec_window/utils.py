@@ -405,7 +405,7 @@ def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
 def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
     [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
-
+    
     NDCG = [0.0] * k_future_pos
     HT = [0.0] * k_future_pos
     SEQUENCE_SCORE = [0.0] * k_future_pos

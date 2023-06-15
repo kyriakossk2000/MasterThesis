@@ -30,6 +30,7 @@ parser.add_argument('--window_split', default=False, type=str2bool)       # wind
 parser.add_argument('--window_size', default=1, type=int)                # window size
 parser.add_argument('--window_eval', default=False, type=str2bool)       # window evaluation or not
 parser.add_argument('--window_eval_size', default=1, type=int)  # evaluate in the k position in the future 
+parser.add_argument('--all_action', default=False, type=str2bool)  # all action prediction mimicking the Pinnerformer paper 
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -145,9 +146,15 @@ if __name__ == '__main__':
             pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             # print("\neye ball check raw_logits:"); print(pos_logits); print(neg_logits) # check pos_logits > 0, neg_logits < 0
             adam_optimizer.zero_grad()
-            indices = np.where(pos != 0)
-            loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-            loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+            if args.all_action:
+                indices = -1
+                loss = bce_criterion(pos_logits[:, indices], pos_labels[:, indices])
+                loss = bce_criterion(neg_logits[:, indices], neg_labels[:, indices])
+            else:
+                indices = np.where(pos != 0) 
+                loss = bce_criterion(pos_logits[indices], pos_labels[indices]) 
+                loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+
             for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
             loss.backward()
             adam_optimizer.step()
