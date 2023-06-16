@@ -110,7 +110,7 @@ if __name__ == '__main__':
         else:
             print('Evaluating with window ' + str(args.window_eval_size) + '\n')
             t_test = evaluate_window_new(model, dataset, args, dataset_window) 
-            t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg = t_test
+            t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, t_test_kendall, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, t_test_kendall_avg = t_test
 
             # print table headers
             print('\n')
@@ -118,14 +118,17 @@ if __name__ == '__main__':
             print("HR@10 Test Average: %.4f" % ht_avg)
             print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)
             print("HT_Ordered@10 Test Average: %.4f" % ht_ordered_score_avg)
-            print('{:<10}{:<10}{:<10}{:<10}{:<10}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score"))
+            print("Kendall's Tau Average: %.4f" % t_test_kendall_avg)
+            print('{:<15}{:<10}{:<10}{:<10}{:<10}{:<10}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score", "Test_Kendall"))
+            
             for position in range(len(t_test_NDCG)):
-                print('{:<10}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
+                print('{:<15}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
                     position + 1,
                     t_test_NDCG[position],
                     t_test_HR[position],
                     t_test_sequence_score[position],
-                    t_test_ht_ordered_score[position]    
+                    t_test_ht_ordered_score[position],
+                    t_test_kendall[position]
                 ))
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
@@ -174,30 +177,37 @@ if __name__ == '__main__':
                 print('Evaluating with window ' + str(args.window_eval_size) + '\n')
                 t_test = evaluate_window_new(model, dataset, args, dataset_window)
                 t_valid = evaluate_valid_window_new(model, dataset, args, dataset_window)
-                t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg = t_test
-                t_valid_NDCG, t_valid_HR, t_valid_sequence_score, t_valid_ht_ordered_score, valid_ndcg_avg, valid_ht_avg, valid_sequence_score_avg, valid_ht_ordered_score_avg = t_valid
+                t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, t_test_kendall, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, t_test_kendall_avg = t_test
+                t_valid_NDCG, t_valid_HR, t_valid_sequence_score, t_valid_ht_ordered_score, t_valid_kendall, valid_ndcg_avg, valid_ht_avg, valid_sequence_score_avg, valid_ht_ordered_score_avg, valid_kendall_avg = t_valid
 
+                print("Test" + '\n')
                 print("NDCG@10 Test Average: %.4f" % ndcg_avg)
                 print("HR@10 Test Average: %.4f" % ht_avg)
                 print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)
                 print("HT_Ordered@10 Test Average: %.4f" % ht_ordered_score_avg)
+                print("Kendall's Tau Test Average: %.4f" % t_test_kendall_avg)
+
+                print("Valid" + '\n')
                 print("NDCG@10 Valid Average: %.4f" % valid_ndcg_avg)
                 print("HR@10 Valid Average: %.4f" % valid_ht_avg)
                 print("Sequence_Score@10 Valid Average: %.4f" % valid_sequence_score_avg)
                 print("HT_Ordered@10 Valid Average: %.4f" % valid_ht_ordered_score_avg)
+                print("Kendall's Tau Valid Average: %.4f" % valid_kendall_avg)
                 # print table headers
-                print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score", "Valid_NDCG", "Valid_HR", "Valid_Sequence_Score", "Valid_HT_Ordered_Score"))
+                print('{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}{:<10s}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score", "Test_Kendall Tau", "Valid_NDCG", "Valid_HR", "Valid_Sequence_Score", "Valid_HT_Ordered_Score", "Valid_Kendall Tau"))
                 for position in range(len(t_test_NDCG)):
-                    print('{:<10d}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
+                    print('{:<10d}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}{:<10.4f}'.format(
                         position + 1,
                         t_test_NDCG[position],
                         t_test_HR[position],
                         t_test_sequence_score[position],
                         t_test_ht_ordered_score[position],
+                        t_test_kendall[position],
                         t_valid_NDCG[position],
                         t_valid_HR[position],
                         t_valid_sequence_score[position],
-                        t_valid_ht_ordered_score[position],                        
+                        t_valid_ht_ordered_score[position],
+                        t_valid_kendall[position]
                     ))
                 
     

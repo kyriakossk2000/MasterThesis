@@ -6,6 +6,7 @@ import statistics
 import numpy as np
 from collections import defaultdict
 from multiprocessing import Process, Queue
+from scipy.stats import kendalltau
 
 # sampler for batch generation
 def random_neq(l, r, s):
@@ -405,80 +406,14 @@ def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
 def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
     [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
-    
-    NDCG = [0.0] * k_future_pos
-    HT = [0.0] * k_future_pos
-    SEQUENCE_SCORE = [0.0] * k_future_pos
-    HT_ORDERED_SCORE = [0.0] * k_future_pos
-    weight_ht, weight_ordering = 0.7, 0.3
-    valid_user = 0.0
-    count = 0
-    if usernum > 10000:
-        users = random.sample(range(1, usernum + 1), 10000)
-    else:
-        users = range(1, usernum + 1)
-
-    for u in users:
-        if len(train[u]) < 1 or len(test[u]) < k_future_pos: continue
-        count += 1
-        
-        seq = np.zeros([args.maxlen], dtype=np.int32)
-        idx = args.maxlen - 1
-        for i in reversed(train[u] + valid[u]):
-            seq[idx] = i
-            idx -= 1
-            if idx == -1: break
-
-        rated = set(train[u])
-        rated.add(0)
-        for j in range(k_future_pos):
-            item_indices = [test[u][j]]
-            for _ in range(99):
-                t = np.random.randint(1, itemnum + 1)
-                while t in rated: t = np.random.randint(1, itemnum + 1)
-                item_indices.append(t)
-
-            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
-            predictions = predictions[0]
-            
-            # Ranking and Score calculations
-            ranks = predictions.argsort().argsort()
-            rank = ranks[0].item()
-            
-            # Calculating the Sequence Score
-            if rank < top_N:
-                seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
-                SEQUENCE_SCORE[j] += seq_score
-                
-                NDCG[j] += 1 / np.log2(rank + 2)
-                HT[j] += 1
-        
-        valid_user += 1
-        if valid_user % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
-
-    # Averaging NDCG, Hit Rate and Sequence Score for each position
-    NDCG = [score / valid_user for score in NDCG]
-    HT = [score / valid_user for score in HT]
-    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
-    HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
-    print('count: ', count)
-    ndcg_avg = statistics.mean(NDCG)
-    ht_avg = statistics.mean(HT)
-    sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
-    ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
-    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg
-
-def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
-    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
-    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
 
     NDCG = [0.0] * k_future_pos
     HT = [0.0] * k_future_pos
     SEQUENCE_SCORE = [0.0] * k_future_pos
     HT_ORDERED_SCORE = [0.0] * k_future_pos
-    weight_ht, weight_ordering = 0.7, 0.3
+    KENDALL_SCORE = [0.0] * k_future_pos
+
+    weight_ht, weight_ordering = 0.5, 0.5
     valid_user = 0.0
     count = 0
     if usernum > 10000:
@@ -499,8 +434,13 @@ def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos
 
         rated = set(train[u])
         rated.add(0)
+
+        true_ordering = []
+        predicted_ordering = []
+
         for j in range(k_future_pos):
             item_indices = [valid[u][j]]
+            true_ordering.append(test[u][j])
             for _ in range(99):
                 t = np.random.randint(1, itemnum + 1)
                 while t in rated: t = np.random.randint(1, itemnum + 1)
@@ -509,6 +449,14 @@ def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
             predictions = predictions[0]
             
+            # Find the item with the highest prediction score
+            top_predicted_index = max(enumerate(predictions), key=lambda x: x[1])[0]
+
+            top_predicted_item = item_indices[top_predicted_index]
+            
+            # Append the top predicted item to the predicted_ordering list
+            predicted_ordering.append(top_predicted_item)
+
             # Ranking and Score calculations
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
@@ -521,19 +469,123 @@ def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
         
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(true_ordering, predicted_ordering)
+        KENDALL_SCORE[-1] += tau
+
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
+        if count <= 4:
+            print("True Order: ",true_ordering)
+            print("Predicted Order" ,predicted_ordering)
 
     # Averaging NDCG, Hit Rate and Sequence Score for each position
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
     SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
     HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
+    KENDALL_SCORE = [score / valid_user for score in KENDALL_SCORE]
     print('count: ', count)
     ndcg_avg = statistics.mean(NDCG)
     ht_avg = statistics.mean(HT)
     sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
     ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
-    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg
+    kendall_score_avg = statistics.mean(KENDALL_SCORE)
+
+    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, KENDALL_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, kendall_score_avg
+
+def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
+    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
+
+    NDCG = [0.0] * k_future_pos
+    HT = [0.0] * k_future_pos
+    SEQUENCE_SCORE = [0.0] * k_future_pos
+    HT_ORDERED_SCORE = [0.0] * k_future_pos
+    KENDALL_SCORE = [0.0] * k_future_pos
+
+    weight_ht, weight_ordering = 0.5, 0.5
+    valid_user = 0.0
+    count = 0
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    for u in users:
+        if len(train[u]) < 1 or len(valid[u]) < k_future_pos: continue
+        count += 1
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u])
+        rated.add(0)
+
+        true_ordering = []
+        predicted_ordering = []
+
+        for j in range(k_future_pos):
+            item_indices = [valid[u][j]]
+            true_ordering.append(test[u][j])
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
+
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
+            
+            # Find the item with the highest prediction score
+            top_predicted_index = max(enumerate(predictions), key=lambda x: x[1])[0]
+
+            top_predicted_item = item_indices[top_predicted_index]
+            
+            # Append the top predicted item to the predicted_ordering list
+            predicted_ordering.append(top_predicted_item)
+
+            # Ranking and Score calculations
+            ranks = predictions.argsort().argsort()
+            rank = ranks[0].item()
+            
+            # Calculating the Sequence Score
+            if rank < top_N:
+                seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
+                SEQUENCE_SCORE[j] += seq_score
+                
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
+        
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(true_ordering, predicted_ordering)
+        KENDALL_SCORE[-1] += tau
+
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+
+        if count <= 4:
+            print("True Order: ",true_ordering)
+            print("Predicted Order" ,predicted_ordering)
+
+    # Averaging NDCG, Hit Rate and Sequence Score for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
+    KENDALL_SCORE = [score / valid_user for score in KENDALL_SCORE]
+    print('count: ', count)
+    ndcg_avg = statistics.mean(NDCG)
+    ht_avg = statistics.mean(HT)
+    sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
+    ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
+    kendall_score_avg = statistics.mean(KENDALL_SCORE)
+
+    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, KENDALL_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, kendall_score_avg
