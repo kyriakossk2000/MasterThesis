@@ -1,3 +1,4 @@
+import math
 import sys
 import copy
 import torch
@@ -466,9 +467,10 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
         true_positions, predicted_rankings = zip(*pi_ri_pairs)
 
         # Calculating Kendall's Tau for the sequence
-        tau, _ = kendalltau(true_positions, predicted_rankings)
-        tau_scores.append(tau)
-
+        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
+    
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
@@ -555,8 +557,9 @@ def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos
         true_positions, predicted_rankings = zip(*pi_ri_pairs)
 
         # Calculating Kendall's Tau for the sequence
-        tau, _ = kendalltau(true_positions, predicted_rankings)
-        tau_scores.append(tau)
+        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
 
         valid_user += 1
         if valid_user % 100 == 0:
