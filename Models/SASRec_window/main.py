@@ -151,7 +151,7 @@ if __name__ == '__main__':
             if args.all_action:
                 indices = -1
                 loss = bce_criterion(pos_logits[:, indices], pos_labels[:, indices])
-                loss = bce_criterion(neg_logits[:, indices], neg_labels[:, indices])
+                loss += bce_criterion(neg_logits[:, indices], neg_labels[:, indices])
             else:
                 indices = np.where(pos != 0) 
                 loss = bce_criterion(pos_logits[indices], pos_labels[indices]) 
