@@ -476,6 +476,9 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
             print('.', end="")
             sys.stdout.flush()
         if count < 5:
+            print("User:", u)
+            print("Test data for user:", test[u])
+            print("Model predictions for user:", predictions)
             print("true_positions: ", true_positions)
             print("predicted_rankings: ", predicted_rankings)
 
