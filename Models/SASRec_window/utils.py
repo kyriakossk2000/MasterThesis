@@ -450,7 +450,6 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
             predictions = predictions[0]
             
-            # Ranks
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
 
@@ -475,12 +474,7 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
-        if count < 5:
-            print("User:", u)
-            print("Test data for user:", test[u])
-            print("Model predictions for user:", predictions)
-            print("true_positions: ", true_positions)
-            print("predicted_rankings: ", predicted_rankings)
+      
 
     # Averaging NDCG, Hit Rate, and Sequence Score for each position
     NDCG = [score / valid_user for score in NDCG]
