@@ -412,6 +412,8 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
     HT = [0.0] * k_future_pos
     SEQUENCE_SCORE = [0.0] * k_future_pos
     HT_ORDERED_SCORE = [0.0] * k_future_pos
+    WOW = [0.0] * k_future_pos
+    TEST = [0.0] * k_future_pos
 
     weight_ht, weight_ordering = 0.5, 0.5
     valid_user = 0.0
@@ -423,7 +425,7 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
         users = range(1, usernum + 1)
 
     tau_scores = []
-    
+    tau_scores_test = []
     for u in users:
         if len(train[u]) < 1 or len(test[u]) < k_future_pos: continue
         count += 1
@@ -455,26 +457,32 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
 
             # Form (p_i, r_i) pairs
             pi_ri_pairs.append((j+1, rank+1))
-
+            WOW[j] = rank
+            TEST[j] = j+1
             if rank < top_N:
                 seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
                 SEQUENCE_SCORE[j] += seq_score
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
+            
         
         # Unzip the pairs into two separate lists
         true_positions, predicted_rankings = zip(*pi_ri_pairs)
 
         # Calculating Kendall's Tau for the sequence
         tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        tautest, _ = kendalltau(TEST, WOW, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
-    
+        if not math.isnan(tautest):
+            tau_scores_test.append(tautest)
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
-      
+        if count < 4:
+            print("TRUTH: ", TEST)
+            print("PREDICTION: ", WOW)
 
     # Averaging NDCG, Hit Rate, and Sequence Score for each position
     NDCG = [score / valid_user for score in NDCG]
@@ -482,7 +490,8 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
     SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
     HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
     avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
-
+    avg_kendall_tau_test = sum(tau_scores_test) / len(tau_scores_test) if tau_scores_test else 0
+    print('avg_kendall_tau_TEST: ', avg_kendall_tau_test)
     print('count: ', count)
     ndcg_avg = statistics.mean(NDCG)
     ht_avg = statistics.mean(HT)
