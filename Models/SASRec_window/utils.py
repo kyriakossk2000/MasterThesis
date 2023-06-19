@@ -464,6 +464,9 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
         
         # Unzip the pairs into two separate lists
         true_positions, predicted_rankings = zip(*pi_ri_pairs)
+        if count < 5:
+            print("True positions: ", true_positions)
+            print("Predicted rankings: ", predicted_rankings)
 
         # Calculating Kendall's Tau for the sequence
         tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
