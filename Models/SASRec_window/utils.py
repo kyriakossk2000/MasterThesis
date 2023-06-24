@@ -16,6 +16,11 @@ def random_neq(l, r, s):
         t = np.random.randint(l, r)
     return t
 
+# sampler for batch generation for all action and dense all action
+def random_neq_all(l, r, s, count):
+    possible_numbers = list(set(range(l, r)) - set(s))
+    np.random.shuffle(possible_numbers)
+    return possible_numbers[:count]
 
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
@@ -73,6 +78,84 @@ class WarpSampler(object):
         for p in self.processors:
             p.terminate()
             p.join()
+
+def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size):
+    def sample():
+        pos_samples = window_size
+    
+        user = np.random.randint(1, usernum + 1)
+        while len(user_train_seq[user]) <= 1:
+            user = np.random.randint(1, usernum + 1)
+
+        seq = np.zeros([maxlen], dtype=np.int32)  # interaction sequence
+
+        idx = maxlen - 1
+        ts = set(user_train_seq[user] + train_target_seq[user])
+        if model_training == 'all_action':
+            neg_samples = 10
+            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
+            pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
+            for i in reversed(user_train_seq[user]):
+                seq[idx] = i 
+                if idx == maxlen - 1:
+                    # pad or truncate the train_target_seq[user] to make it of shape (7,)
+                    target_samples = train_target_seq[user][:pos_samples]
+                    target_samples += [0] * (pos_samples - len(target_samples))
+                    pos[idx] = target_samples
+                    neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                idx -= 1
+                if idx == -1: break
+        elif model_training == 'dense_all_action':
+            neg_samples = 1
+            pos = np.zeros([maxlen], dtype=np.int32)
+            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
+            for i in reversed(user_train_seq[user]):
+                seq[idx] = i 
+                random_target = random.sample(train_target_seq[user], 1)[0]
+                pos[idx] = random_target
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                idx -= 1
+                if idx == -1: break
+
+        return user, seq, pos, neg
+
+    np.random.seed(SEED)
+    while True:
+        one_batch = []
+        for i in range(batch_size):
+            one_batch.append(sample())
+
+        result_queue.put(zip(*one_batch))
+
+# All action and Dense all action sampler based on Pinnerformer 
+class WarpSamplerAll(object):
+    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, model_training='all_action', window_size=7):
+        self.result_queue = Queue(maxsize=n_workers * 10)
+        self.processors = []
+        for i in range(n_workers):
+            self.processors.append(
+                Process(target=sample_function_all, args=(user_input_seq,
+                                                        user_target_seq,
+                                                        usernum,
+                                                        itemnum,
+                                                        batch_size,
+                                                        maxlen,
+                                                        self.result_queue,
+                                                        np.random.randint(2e9),
+                                                        model_training,
+                                                        window_size
+                                                        )))
+            self.processors[-1].daemon = True
+            self.processors[-1].start()
+
+    def next_batch(self):
+        return self.result_queue.get()
+
+    def close(self):
+        for p in self.processors:
+            p.terminate()
+            p.join()
+
 
 # -------- ORIGINAL SASRec ---------- #
 # train/val/test data generation
@@ -201,7 +284,7 @@ def evaluate_valid(model, dataset, args):
     return NDCG / valid_user, HT / valid_user
 
 # -------- SASRec with window ---------- #
-def data_partition_window(fname):
+def data_partition_window_baseline(fname):
     usernum = 0
     itemnum = 0
     User = defaultdict(list)
@@ -218,6 +301,7 @@ def data_partition_window(fname):
         itemnum = max(i, itemnum)
         User[u].append(i)
     # create partitions
+    index = 0
     for user in User:
         nfeedback = len(User[user])
         
@@ -229,7 +313,7 @@ def data_partition_window(fname):
             seq_len = len(User[user]) - 2  # exclude the last two elements from the sequence
             valid_index = int(seq_len * 0.8)  # index that corresponds to approximately 80% of the sequence length
             test_index = int(seq_len * 0.9)
-
+            index += 1
             # Only the input sequences without target sequences
             user_train[user] = User[user][:valid_index]
             user_valid[user] = User[user][valid_index:test_index]
@@ -238,9 +322,10 @@ def data_partition_window(fname):
     return [user_train, user_valid, user_test, usernum, itemnum]
 
 # -------- SASRec with Window and Split feed---------- #
-def data_partition_window_split(fname, target_seq_percentage=0.9):
+def data_partition_window_independent(fname, target_seq_percentage=0.9):
     usernum = 0
     itemnum = 0
+    train_samples = 0
     User = defaultdict(list)
     user_train = {}
     user_train_seq = {}
@@ -276,7 +361,6 @@ def data_partition_window_split(fname, target_seq_percentage=0.9):
             split_index = int(len(train_seq) * target_seq_percentage)
             input_seq = train_seq[:split_index]  
             target_seq = train_seq[split_index:]
-
             for single_target in target_seq:
                 temp_input = input_seq.copy()
                 temp_input.append(single_target)
@@ -287,8 +371,66 @@ def data_partition_window_split(fname, target_seq_percentage=0.9):
             user_valid[user] = valid_seq
             user_test[user] = test_seq
 
-    usernum = index
-    return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum]
+    train_samples = index
+    return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum, train_samples]
+
+# -------- Partition with Window for Dense all action and All action ---------- #
+def data_partition_window_all_action(fname, window_size=7, target_seq_percentage=0.9):
+    train_start = target_seq_percentage
+    usernum = 0
+    itemnum = 0
+    User = defaultdict(list)
+    user_input = {}
+    user_target = {}
+    user_train = {}
+    user_valid = {}
+    user_test = {}
+
+    f = open('data/%s.txt' % fname, 'r')
+    for line in f:
+        u, i = line.rstrip().split(' ')
+        u = int(u)
+        i = int(i)
+        usernum = max(u, usernum)
+        itemnum = max(i, itemnum)
+        User[u].append(i)
+    c = 0
+    for user in User:
+        nfeedback = len(User[user])
+
+        if nfeedback < 3:
+            user_train[user] = User[user]
+            user_valid[user] = []
+            user_test[user] = []
+        else:
+            seq_len = len(User[user]) - 2
+            valid_index = int(seq_len * 0.8)
+            test_index = int(seq_len * 0.9)
+
+            train_seq = User[user][:valid_index]
+            valid_seq = User[user][valid_index:test_index]
+            test_seq = User[user][test_index:]
+
+            split_index = int(len(train_seq) * train_start)
+            input_seq = train_seq[:split_index]
+            target_seq = train_seq[split_index:]
+            
+            # Randomly sample or choose up to window size actions for target_seq
+            if len(target_seq) < window_size:
+                # Calculate number of elements needed to reach the window size
+                num_needed = window_size - len(target_seq)
+                # Sample the minimum between the number of elements needed and the length of target_seq
+                additional_elements = random.sample(target_seq, min(num_needed, len(target_seq)))
+                target_seq.extend(additional_elements)
+            
+            # Assign sequences to respective dictionaries
+            user_input[user] = input_seq
+            user_target[user] = target_seq
+            user_train[user] = train_seq
+            user_valid[user] = valid_seq
+            user_test[user] = test_seq
+
+    return [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum]
 
 # Evaluate on test set with window
 def evaluate_window(model, dataset, args, dataset_window, k=7):
@@ -404,9 +546,13 @@ def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
 
     return NDCG, HT, ndcg_avg, ht_avg
 
-def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
-    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
-    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
+def evaluate_window_new(model, dataset, args, k_future_pos=7, top_N=10):
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
+        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    elif args.data_partition == None or args.data_partition == 'None':
+        [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    else:
+        [_, train, valid, test, usernum, itemnum, _] = copy.deepcopy(dataset)
 
     NDCG = [0.0] * k_future_pos
     HT = [0.0] * k_future_pos
@@ -494,9 +640,13 @@ def evaluate_window_new(model, dataset, args, dataset_window, k_future_pos=7, to
 
     return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, avg_kendall_tau
 
-def evaluate_valid_window_new(model, dataset, args, dataset_window, k_future_pos=7, top_N=10):
-    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
-    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
+def evaluate_valid_window_new(model, dataset, args, k_future_pos=7, top_N=10):
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
+        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    elif args.data_partition == None or args.data_partition == 'None':
+        [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    else:
+        [_, train, valid, test, usernum, itemnum, _] = copy.deepcopy(dataset)
 
     NDCG = [0.0] * k_future_pos
     HT = [0.0] * k_future_pos

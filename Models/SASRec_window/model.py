@@ -19,7 +19,6 @@ class PointWiseFeedForward(torch.nn.Module):
         outputs += inputs
         return outputs
 
-# pls use the following self-made multihead attention layer
 # in case your pytorch version is below 1.16 or for other reasons
 # https://github.com/pmixer/TiSASRec.pytorch/blob/master/model.py
 
@@ -30,6 +29,7 @@ class SASRec(torch.nn.Module):
         self.user_num = user_num
         self.item_num = item_num
         self.dev = args.device
+        self.model_training = args.model_training
 
         # https://stackoverflow.com/questions/42704283/adding-l1-l2-regularization-in-pytorch
         self.item_emb = torch.nn.Embedding(self.item_num+1, args.hidden_units, padding_idx=0)
@@ -92,12 +92,48 @@ class SASRec(torch.nn.Module):
 
     def forward(self, user_ids, log_seqs, pos_seqs, neg_seqs): # for training        
         log_feats = self.log2feats(log_seqs) # user_ids hasn't been used yet
+        
+        if self.model_training == 'all_action':
+            final_embedding = log_feats[:, -1, :]  # get last embedding el
 
-        pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
-        neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
+            # Convert sequences to tensors and move them to the desired device
+            pos_seqs_tensor = torch.LongTensor(pos_seqs).to(self.dev)
+            neg_seqs_tensor = torch.LongTensor(neg_seqs).to(self.dev)
+            
+            # Get embeddings of the positive and negative samples (last elements)
+            pos_samples_embeddings = self.item_emb(pos_seqs_tensor)[:, -1, :]
+            neg_samples_embeddings = self.item_emb(neg_seqs_tensor)[:, -1, :]
+            
+            # Unsqueeze final_embedding for matrix multiplication
+            final_embedding_expanded = final_embedding.unsqueeze(1)
+            
+            # Calculate the logits
+            pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
+            neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
 
-        pos_logits = (log_feats * pos_embs).sum(dim=-1)
-        neg_logits = (log_feats * neg_embs).sum(dim=-1)
+        elif self.model_training == 'dense_all_action':
+            # Convert positive and negative sequences to tensors and move them to the desired device
+            pos_seqs_as_tensor = torch.LongTensor(pos_seqs).to(self.dev)
+            neg_seqs_as_tensor = torch.LongTensor(neg_seqs).to(self.dev)
+
+            # Get embeddings of the positive and negative samples
+            pos_sample_embeddings = self.item_emb(pos_seqs_as_tensor)
+            neg_sample_embeddings = self.item_emb(neg_seqs_as_tensor)
+
+            # Calculate the positive logits
+            pos_logits = (log_feats * pos_sample_embeddings).sum(dim=-1)
+
+            # Expand the log_feats tensor dimension for matrix multiplication with neg_sample_embeddings
+            log_feats_expanded = log_feats.unsqueeze(2)
+            # Calculate the negative logits
+            neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
+            
+        else:
+            pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
+            neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
+
+            pos_logits = (log_feats * pos_embs).sum(dim=-1)
+            neg_logits = (log_feats * neg_embs).sum(dim=-1)
 
         return pos_logits, neg_logits # pos_pred, neg_pred
 
