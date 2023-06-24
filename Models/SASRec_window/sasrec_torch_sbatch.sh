@@ -35,9 +35,16 @@ export DATASET_DIR=${TMP}/datasets/
 
 source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 
-#python main.py --device=cuda --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2
 #python main.py --device=cuda --dataset=Video --train_dir=default
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=false --window_eval=true --device=cuda
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=true --window_eval=true --device=cuda --num_epochs=100
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=false --window_eval=true --inference_only=true --state_dict_path=SASRec_dict_baselien_no_split.pth  --device=cuda
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --window_split=true --window_eval=true --all_action=true --device=cuda
+# FOR TRAINING 
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=None --window_eval=true # BASELINE
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=independent --model_training=None --window_eval=true   # sasrec independent            
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=all_action --window_eval=true   # all action   
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=201 --dropout_rate=0.2 --data_partition=None --model_training=dense_all_action --window_eval=true  # dense all action 
+
+# FOR INFERENCE ONLY (NO TRAINING)
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=None --window_eval=true --inference_only=true # BASELINE
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=independent --model_training=None --window_eval=true --inference_only=true  # sasrec independent            
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=all_action --window_eval=true --inference_only=true # all action   
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=dense_all_action --window_eval=true --inference_only=true # dense all action        
+
