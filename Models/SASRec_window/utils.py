@@ -432,121 +432,8 @@ def data_partition_window_all_action(fname, window_size=7, target_seq_percentage
 
     return [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum]
 
-# Evaluate on test set with window
-def evaluate_window(model, dataset, args, dataset_window, k=7):
-    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
-    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
-
-    NDCG = [0.0] * k
-    HT = [0.0] * k
-    valid_user = 0.0
-    count = 0
-    # Limit the number of users evaluated
-    if usernum > 10000:
-        users = random.sample(range(1, usernum + 1), 10000)
-    else:
-        users = range(1, usernum + 1)
-
-    for u in users:
-        if len(train[u]) < 1 or len(test[u]) < k: continue
-        count += 1
-        
-        seq = np.zeros([args.maxlen], dtype=np.int32)
-        idx = args.maxlen - 1
-        for i in reversed(train[u] + valid[u]):
-            seq[idx] = i
-            idx -= 1
-            if idx == -1: break
-
-        rated = set(train[u])
-        rated.add(0)
-        for j in range(k):
-            item_indices = [test[u][j]]
-            for _ in range(99):
-                t = np.random.randint(1, itemnum + 1)
-                while t in rated: t = np.random.randint(1, itemnum + 1)
-                item_indices.append(t)
-
-            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
-            predictions = predictions[0]
-            
-            ranks = predictions.argsort().argsort()  # rank items by their scores
-            rank = ranks[0].item()
-            if rank < 10:
-                NDCG[j] += 1 / np.log2(rank + 2)
-                HT[j] += 1
-
-        valid_user += 1
-        if valid_user % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
-
-    # Averaging NDCG and Hit Rate for each position
-    NDCG = [score / valid_user for score in NDCG]
-    HT = [score / valid_user for score in HT]
-    print('count: ', count)
-    ndcg_avg = statistics.mean(NDCG)   
-    ht_avg = statistics.mean(HT)
-    return NDCG, HT, ndcg_avg, ht_avg
-
-
-# evaluate on valid set window
-def evaluate_valid_window(model, dataset, args, dataset_window, k=7):
-    [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
-    [_, train, valid, test, _, itemnum] = copy.deepcopy(dataset_window)
-
-    NDCG = [0.0] * k
-    HT = [0.0] * k
-    valid_user = 0.0
-    
-    # Limit the number of users evaluated
-    if usernum > 10000:
-        users = random.sample(range(1, usernum + 1), 10000)
-    else:
-        users = range(1, usernum + 1)
-
-    for u in users:
-        if len(train[u]) < 1 or len(valid[u]) < k: continue
-        
-        seq = np.zeros([args.maxlen], dtype=np.int32)
-        idx = args.maxlen - 1
-        for i in reversed(train[u]):
-            seq[idx] = i
-            idx -= 1
-            if idx == -1: break
-
-        rated = set(train[u])
-        rated.add(0)
-        for j in range(k):
-            item_indices = [valid[u][j]]
-            for _ in range(99):
-                t = np.random.randint(1, itemnum + 1)
-                while t in rated: t = np.random.randint(1, itemnum + 1)
-                item_indices.append(t)
-
-            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
-            predictions = predictions[0]
-            
-            ranks = predictions.argsort().argsort()  # rank items by their scores
-            rank = ranks[0].item()
-            if rank < 10:
-                NDCG[j] += 1 / np.log2(rank + 2)
-                HT[j] += 1
-
-        valid_user += 1
-        if valid_user % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
-
-    # Averaging NDCG and Hit Rate for each position
-    NDCG = [score / valid_user for score in NDCG]
-    HT = [score / valid_user for score in HT]
-    ndcg_avg = statistics.mean(NDCG)   
-    ht_avg = statistics.mean(HT)
-
-    return NDCG, HT, ndcg_avg, ht_avg
-
-def evaluate_window_new(model, dataset, args, k_future_pos=7, top_N=10):
+# Eval over window per step into the future 
+def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
         [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     elif args.data_partition == None or args.data_partition == 'None':
@@ -640,7 +527,7 @@ def evaluate_window_new(model, dataset, args, k_future_pos=7, top_N=10):
 
     return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, avg_kendall_tau
 
-def evaluate_valid_window_new(model, dataset, args, k_future_pos=7, top_N=10):
+def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
         [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     elif args.data_partition == None or args.data_partition == 'None':
@@ -730,3 +617,139 @@ def evaluate_valid_window_new(model, dataset, args, k_future_pos=7, top_N=10):
     ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
 
     return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, avg_kendall_tau
+
+# evaluates over all future sequences. K number of positives and draws 100 * neg samples
+def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
+        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    elif args.data_partition == None or args.data_partition == 'None':
+        [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    else:
+        [_, train, valid, test, usernum, itemnum, _] = copy.deepcopy(dataset)
+
+    NDCG = 0.0
+    HT = 0.0
+    valid_user = 0.0
+    tau_scores = []
+
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    for u in users:
+        if len(train[u]) < 1 or len(test[u]) < k_future_pos: continue
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u] + valid[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u])
+        rated.add(0)
+        item_indices = test[u][:k_future_pos]
+
+        # Select k * 100 negative samples
+        for _ in range(100 * k_future_pos):
+            t = np.random.randint(1, itemnum + 1)
+            while t in rated: t = np.random.randint(1, itemnum + 1)
+            item_indices.append(t)
+
+        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+        predictions = predictions[0]
+
+        # Calculate statistics for the aggregated samples
+        ranks = predictions.argsort().argsort()
+        for j, rank in enumerate(ranks[:k_future_pos]):
+            if rank < top_N:
+                NDCG += 1 / np.log2(rank + 2)
+                HT += 1
+
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(list(range(1, k_future_pos + 1)), ranks[:k_future_pos], variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
+        
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+
+    # Averaging NDCG, Hit Rate
+    NDCG /= valid_user
+    HT /= valid_user
+    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
+
+    print('valid_user count: ', valid_user)
+
+    return NDCG, HT, avg_kendall_tau
+
+# evaluates over all future sequences. K number of positives and draws 100 * neg samples
+def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=10):
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
+        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    elif args.data_partition == None or args.data_partition == 'None':
+        [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+    else:
+        [_, train, valid, test, usernum, itemnum, _] = copy.deepcopy(dataset)
+
+    NDCG = 0.0
+    HT = 0.0
+    valid_user = 0.0
+    tau_scores = []
+
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    for u in users:
+        if len(train[u]) < 1 or len(valid[u]) < k_future_pos: continue
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u])
+        rated.add(0)
+        item_indices = valid[u][:k_future_pos]
+
+        # Select k * 100 negative samples
+        for _ in range(100 * k_future_pos):
+            t = np.random.randint(1, itemnum + 1)
+            while t in rated: t = np.random.randint(1, itemnum + 1)
+            item_indices.append(t)
+
+        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+        predictions = predictions[0]
+
+        # Calculate statistics for the aggregated samples
+        ranks = predictions.argsort().argsort()
+        for j, rank in enumerate(ranks[:k_future_pos]):
+            if rank < top_N:
+                NDCG += 1 / np.log2(rank + 2)
+                HT += 1
+
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(list(range(1, k_future_pos + 1)), ranks[:k_future_pos], variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
+        
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+
+    # Averaging NDCG, Hit Rate
+    NDCG /= valid_user
+    HT /= valid_user
+    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
+
+    print('valid_user count: ', valid_user)
+
+    return NDCG, HT, avg_kendall_tau
