@@ -631,6 +631,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
     HT = 0.0
     valid_user = 0.0
     tau_scores = []
+    neg_sampels = 500
 
     if usernum > 10000:
         users = random.sample(range(1, usernum + 1), 10000)
@@ -650,9 +651,9 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         rated = set(train[u])
         rated.add(0)
         item_indices = test[u][:k_future_pos]
-
-        # Select k * 100 negative samples
-        for _ in range(100 * k_future_pos):
+        
+        # Select negative samples
+        for _ in range(neg_sampels):
             t = np.random.randint(1, itemnum + 1)
             while t in rated: t = np.random.randint(1, itemnum + 1)
             item_indices.append(t)
@@ -699,6 +700,7 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
     HT = 0.0
     valid_user = 0.0
     tau_scores = []
+    neg_sampels = 500
 
     if usernum > 10000:
         users = random.sample(range(1, usernum + 1), 10000)
@@ -719,8 +721,8 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
         rated.add(0)
         item_indices = valid[u][:k_future_pos]
 
-        # Select k * 100 negative samples
-        for _ in range(100 * k_future_pos):
+        # Select negative samples
+        for _ in range(neg_sampels):
             t = np.random.randint(1, itemnum + 1)
             while t in rated: t = np.random.randint(1, itemnum + 1)
             item_indices.append(t)
