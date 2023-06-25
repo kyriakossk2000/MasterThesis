@@ -679,8 +679,8 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
             sys.stdout.flush()
 
     # Averaging NDCG, Hit Rate
-    NDCG /= valid_user
-    HT /= valid_user
+    NDCG /= (valid_user * k_future_pos)
+    HT /= (valid_user * k_future_pos)
     avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 
     print('valid_user count: ', valid_user)
