@@ -668,7 +668,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         rank_positions = ranks[:k_future_pos]
 
          # Calculate DCG
-        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N)
+        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions.cpu() if rank < top_N)
 
         # Calculate IDCG
         idcg = sum(1 / np.log2(i + 2) for i in range(min(k_future_pos, top_N)))
@@ -753,7 +753,7 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
         rank_positions = ranks[:k_future_pos]
 
         # Calculate DCG
-        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N)
+        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions.cpu() if rank < top_N)
 
         # Calculate IDCG
         idcg = sum(1 / np.log2(i + 2) for i in range(min(k_future_pos, top_N)))
