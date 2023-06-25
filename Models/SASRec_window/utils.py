@@ -630,7 +630,6 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
     NDCG = 0.0
     HT = 0.0
     valid_user = 0.0
-    tau_scores = []
     neg_samples = 500  # Number of negative samples
 
     if usernum > 10000:
@@ -680,11 +679,6 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         NDCG += NDCG_U
         HT += HT_U
         
-        # Calculating Kendall's Tau for the sequence
-        tau, _ = kendalltau(list(range(1, k_future_pos + 1)), target_ds.argsort().argsort(), variant='b')
-        if not math.isnan(tau):
-            tau_scores.append(tau)
-        
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
@@ -693,11 +687,10 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
     # Averaging NDCG, Hit Rate, and Kendall's Tau
     NDCG /= valid_user
     HT /= valid_user
-    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 
     print('valid_user count: ', valid_user)
 
-    return NDCG, HT, avg_kendall_tau
+    return NDCG, HT
 
 # evaluates over all future sequences. K number of positives and draws 100 * neg samples
 def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=10):
