@@ -153,13 +153,12 @@ if __name__ == '__main__':
             print('Evaluating with window ' + str(args.window_eval_size))
             t_test = evaluate_window(model, dataset, args, k_future_pos=args.window_eval_size) 
             t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, t_test_kendall_avg = t_test
-            over_all_NDCG, over_all_HR, over_allKendall = evaluate_window_over_all(model, dataset, args, k_future_pos=args.window_eval_size)
+            over_all_NDCG, over_all_HR = evaluate_window_over_all(model, dataset, args, k_future_pos=args.window_eval_size)
 
             # print table headers
             print('Evaluation statistics when evaluating over all k-steps into the future: ')
             print("NDCG@10 Test Average: %.4f" % over_all_NDCG)
             print("HR@10 Test Average: %.4f" % over_all_HR)
-            print("Kendall's Tau Average: %.4f" % over_allKendall)
             print('\n')
             print('Evaluation statistics when evaluating for each k-step into the future: ')
             print("NDCG@10 Test Average: %.4f" % ndcg_avg)
