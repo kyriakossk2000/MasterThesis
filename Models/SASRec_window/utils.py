@@ -639,7 +639,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(test[u]) < k_future_pos:
+        if len(train[u]) < 1 or len(test[u]) < 1: 
             continue
         
         seq = np.zeros([args.maxlen], dtype=np.int32)
@@ -649,32 +649,34 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
             idx -= 1
             if idx == -1: break
 
-        rated = set(train[u])
+        rated = set(train[u] + valid[u])
         rated.add(0)
-        item_indices = test[u][:k_future_pos]
+        item_indices = test[u]
 
         # Select negative samples
+        neg = []
         for _ in range(neg_samples):
             t = np.random.randint(1, itemnum + 1)
             while t in rated: t = np.random.randint(1, itemnum + 1)
-            item_indices.append(t)
+            neg.append(t)
+        item_idx = item_indices + neg
 
-        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
         predictions = predictions[0]
 
         # Calculate statistics for the aggregated samples
-        target_ds = predictions[:k_future_pos]
-        sample_d = predictions[k_future_pos:]
+        target_ds = predictions[:len(item_indices)]
+        sample_d = predictions[len(item_indices):]
         NDCG_U = 0.0
         HT_U = 0.0
-        for j, target_d in enumerate(target_ds):
+        for target_d in target_ds:
             count = sum(target_d >= sample_d)
             if count < top_N:
                 NDCG_U += 1 / np.log2(count + 2)
                 HT_U += 1
                 
-        NDCG_U = NDCG_U / k_future_pos
-        HT_U = HT_U / k_future_pos
+        NDCG_U = NDCG_U / len(target_ds)
+        HT_U = HT_U / len(target_ds)
         NDCG += NDCG_U
         HT += HT_U
         
@@ -688,7 +690,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
             print('.', end="")
             sys.stdout.flush()
 
-    # Averaging NDCG, Hit Rate
+    # Averaging NDCG, Hit Rate, and Kendall's Tau
     NDCG /= valid_user
     HT /= valid_user
     avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
