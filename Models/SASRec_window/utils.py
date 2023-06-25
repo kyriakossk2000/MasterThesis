@@ -670,8 +670,8 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         HT_U = 0.0
         for target_d in target_ds:
             count = sum(target_d >= sample_d)
-            if count < top_N:
-                NDCG_U += 1 / np.log2(count + 2)
+            if count <= top_N:
+                NDCG_U += 1 / np.log2(count + 1)
                 HT_U += 1
                 
         NDCG_U = NDCG_U / len(target_ds)
@@ -744,8 +744,8 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
         HT_U = 0.0
         for target_d in target_ds:
             count = sum(target_d >= sample_d)
-            if count < top_N:
-                NDCG_U += 1 / np.log2(count + 2)
+            if count <= top_N:
+                NDCG_U += 1 / np.log2(count + 1)
                 HT_U += 1
                 
         NDCG_U = NDCG_U / len(target_ds)
