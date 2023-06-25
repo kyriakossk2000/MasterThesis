@@ -468,7 +468,7 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
             idx -= 1
             if idx == -1: break
 
-        rated = set(train[u])
+        rated = set(train[u] + valid[u])
         rated.add(0)
 
         pi_ri_pairs = []
@@ -630,7 +630,8 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
     NDCG = 0.0
     HT = 0.0
     valid_user = 0.0
-    neg_samples = 500  # Number of negative samples
+    tau_scores = []
+    neg_samples = 99  # Number of negative samples
 
     if usernum > 10000:
         users = random.sample(range(1, usernum + 1), 10000)
@@ -638,7 +639,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(test[u]) < 1: 
+        if len(train[u]) < 1 or len(test[u]) < k_future_pos:
             continue
         
         seq = np.zeros([args.maxlen], dtype=np.int32)
@@ -650,47 +651,47 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
 
         rated = set(train[u] + valid[u])
         rated.add(0)
-        item_indices = test[u]
 
-        # Select negative samples
-        neg = []
-        for _ in range(neg_samples):
+        # Collect k positive samples and some negative samples
+        item_indices = test[u][:k_future_pos]
+        while len(item_indices) < k_future_pos + neg_samples:
             t = np.random.randint(1, itemnum + 1)
-            while t in rated: t = np.random.randint(1, itemnum + 1)
-            neg.append(t)
-        item_idx = item_indices + neg
+            while t in rated:
+                t = np.random.randint(1, itemnum + 1)
+            item_indices.append(t)
 
-        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
+        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
         predictions = predictions[0]
 
-        # Calculate statistics for the aggregated samples
-        target_ds = predictions[:len(item_indices)]
-        sample_d = predictions[len(item_indices):]
-        NDCG_U = 0.0
-        HT_U = 0.0
-        for target_d in target_ds:
-            count = sum(target_d >= sample_d)
-            if count <= top_N:
-                NDCG_U += 1 / np.log2(count + 1)
-                HT_U += 1
-                
-        NDCG_U = NDCG_U / len(target_ds)
-        HT_U = HT_U / len(target_ds)
-        NDCG += NDCG_U
-        HT += HT_U
+        # Get ranking positions of the items
+        ranks = predictions.argsort().argsort()
+        rank_positions = ranks[:k_future_pos]
+
+        # Calculate NDCG and Hit Rate
+        ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N)
+        ht = sum(1 for rank in rank_positions if rank < top_N)
+
+        NDCG += ndcg
+        HT += ht
+
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(list(range(1, k_future_pos + 1)), [rank + 1 for rank in rank_positions], variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
         
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
 
-    # Averaging NDCG, Hit Rate, and Kendall's Tau
+    # Averaging the scores
     NDCG /= valid_user
     HT /= valid_user
+    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 
-    print('valid_user count: ', valid_user)
+    print('\nValid users:', valid_user)
 
-    return NDCG, HT
+    return NDCG, HT, avg_kendall_tau
 
 # evaluates over all future sequences. K number of positives and draws 100 * neg samples
 def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=10):
@@ -704,7 +705,8 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
     NDCG = 0.0
     HT = 0.0
     valid_user = 0.0
-    neg_samples = 500  # Number of negative samples
+    tau_scores = []
+    neg_samples = 99  # Number of negative samples
 
     if usernum > 10000:
         users = random.sample(range(1, usernum + 1), 10000)
@@ -712,7 +714,7 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
         users = range(1, usernum + 1)
 
     for u in users:
-        if len(train[u]) < 1 or len(valid[u]) < 1: 
+        if len(train[u]) < 1 or len(valid[u]) < k_future_pos:
             continue
         
         seq = np.zeros([args.maxlen], dtype=np.int32)
@@ -724,44 +726,44 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
 
         rated = set(train[u])
         rated.add(0)
-        item_indices = valid[u]
 
-        # Select negative samples
-        neg = []
-        for _ in range(neg_samples):
+        # Collect k positive samples and some negative samples
+        item_indices = valid[u][:k_future_pos]
+        while len(item_indices) < k_future_pos + neg_samples:
             t = np.random.randint(1, itemnum + 1)
-            while t in rated: t = np.random.randint(1, itemnum + 1)
-            neg.append(t)
-        item_idx = item_indices + neg
+            while t in rated:
+                t = np.random.randint(1, itemnum + 1)
+            item_indices.append(t)
 
-        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
+        predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
         predictions = predictions[0]
 
-        # Calculate statistics for the aggregated samples
-        target_ds = predictions[:len(item_indices)]
-        sample_d = predictions[len(item_indices):]
-        NDCG_U = 0.0
-        HT_U = 0.0
-        for target_d in target_ds:
-            count = sum(target_d >= sample_d)
-            if count <= top_N:
-                NDCG_U += 1 / np.log2(count + 1)
-                HT_U += 1
-                
-        NDCG_U = NDCG_U / len(target_ds)
-        HT_U = HT_U / len(target_ds)
-        NDCG += NDCG_U
-        HT += HT_U
+        # Get ranking positions of the items
+        ranks = predictions.argsort().argsort()
+        rank_positions = ranks[:k_future_pos]
+
+        # Calculate NDCG and Hit Rate
+        ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N)
+        ht = sum(1 for rank in rank_positions if rank < top_N)
+
+        NDCG += ndcg
+        HT += ht
+
+        # Calculating Kendall's Tau for the sequence
+        tau, _ = kendalltau(list(range(1, k_future_pos + 1)), [rank + 1 for rank in rank_positions], variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
         
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
 
-    # Averaging NDCG, Hit Rate, and Kendall's Tau
+    # Averaging the scores
     NDCG /= valid_user
     HT /= valid_user
+    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 
-    print('valid_user count: ', valid_user)
+    print('\nValid users:', valid_user)
 
-    return NDCG, HT
+    return NDCG, HT, avg_kendall_tau
