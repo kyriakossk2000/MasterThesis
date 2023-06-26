@@ -667,19 +667,9 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
         ranks = predictions.argsort().argsort()
         rank_positions = ranks[:k_future_pos]
 
-         # Calculate DCG
-        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions.cpu() if rank < top_N)
-
-        # Calculate IDCG
-        idcg = sum(1 / np.log2(i + 2) for i in range(min(k_future_pos, top_N)))
-
-        # Calculate NDCG
-        ndcg = 0
-        if idcg > 0:
-            ndcg = dcg / idcg
-
-        # Calculate Hit Rate
-        ht = sum(1 for rank in rank_positions if rank < top_N) / k_future_pos
+        # Calculate NDCG and Hit Rate
+        ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N) / k_future_pos # Devide by k_future_pos to normalize
+        ht = sum(1 for rank in rank_positions if rank < top_N) / k_future_pos 
 
         NDCG += ndcg
         HT += ht
@@ -752,18 +742,8 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
         ranks = predictions.argsort().argsort()
         rank_positions = ranks[:k_future_pos]
 
-        # Calculate DCG
-        dcg = sum(1 / np.log2(rank + 2) for rank in rank_positions.cpu() if rank < top_N)
-
-        # Calculate IDCG
-        idcg = sum(1 / np.log2(i + 2) for i in range(min(k_future_pos, top_N)))
-
-        # Calculate NDCG
-        ndcg = 0
-        if idcg > 0:
-            ndcg = dcg / idcg
-
-        # Calculate Hit Rate
+        # Calculate NDCG and Hit Rate
+        ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N) / k_future_pos # divide by k_future_pos to normalize
         ht = sum(1 for rank in rank_positions if rank < top_N) / k_future_pos
 
         NDCG += ndcg
