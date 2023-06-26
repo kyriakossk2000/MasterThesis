@@ -2,6 +2,7 @@ import os
 import time
 import torch
 import argparse
+from sam_optimizer.sam import SAM
 
 from model import SASRec
 from utils import *
@@ -32,6 +33,7 @@ parser.add_argument('--window_eval_size', default=7, type=int)              # ev
 parser.add_argument('--all_action', default=False, type=str2bool)           # all action training
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
+parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
 
 
 args = parser.parse_args()
@@ -181,12 +183,16 @@ if __name__ == '__main__':
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     bce_criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
-    adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
+    if args.optimizer == 'sam':
+        base_optimizer = torch.optim.Adam
+        sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)
+    else:
+        adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
     
     T = 0.0
     t0 = time.time()
     start_time = time.time()
-    
+    torch.autograd.set_detect_anomaly(True)
     for epoch in range(epoch_start_idx, args.num_epochs + 1):
         if args.inference_only: break # just to decrease identition
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
@@ -194,22 +200,50 @@ if __name__ == '__main__':
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
             pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
-            # print("\neye ball check raw_logits:"); print(pos_logits); print(neg_logits) # check pos_logits > 0, neg_logits < 0
-            adam_optimizer.zero_grad()
-            if args.model_training == 'all_action':
-                indices = -1
-                loss = bce_criterion(pos_logits, pos_labels)
-                loss += bce_criterion(neg_logits, neg_labels)
+            if args.optimizer == 'sam':
+                sam_optimizer.zero_grad()
+                if args.model_training == 'all_action':
+                    indices = -1
+                    loss = bce_criterion(pos_logits, pos_labels)
+                    loss += bce_criterion(neg_logits, neg_labels)
+                else:
+                    indices = np.where(pos != 0)
+                    loss = bce_criterion(pos_logits[indices], pos_labels[indices])
+                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                for param in model.item_emb.parameters():
+                    loss += args.l2_emb * torch.norm(param)
+                loss.backward(retain_graph=True)
+                sam_optimizer.first_step(zero_grad=True)
+                # Second forward-backward pass
+                if args.model_training == 'all_action':
+                    loss = bce_criterion(pos_logits, pos_labels)
+                    loss += bce_criterion(neg_logits, neg_labels)
+                else:
+                    loss = bce_criterion(pos_logits[indices], pos_labels[indices])
+                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                
+                for param in model.item_emb.parameters():
+                    loss += args.l2_emb * torch.norm(param)
+                loss.backward()
+                sam_optimizer.second_step(zero_grad=True)
+                print('SAMM')
+                exit()
             else:
-                indices = np.where(pos != 0) 
-                loss = bce_criterion(pos_logits[indices], pos_labels[indices]) 
-                loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                adam_optimizer.zero_grad()
+                if args.model_training == 'all_action':
+                    indices = -1
+                    loss = bce_criterion(pos_logits, pos_labels)
+                    loss += bce_criterion(neg_logits, neg_labels)
+                else:
+                    indices = np.where(pos != 0) 
+                    loss = bce_criterion(pos_logits[indices], pos_labels[indices]) 
+                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
 
-            for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
-            loss.backward()
-            adam_optimizer.step()
-            print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
-    
+                for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
+                loss.backward()
+                adam_optimizer.step()
+                print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
+        
         if epoch % 20 == 0:
             model.eval()
             t1 = time.time() - t0

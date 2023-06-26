@@ -43,7 +43,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=199 --dropout_rate=0
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=201 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=dense_all_action --window_eval=true  # dense all action 
 
 # FOR INFERENCE ONLY (NO TRAINING)
-# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=None --window_eval=true --inference_only=true # BASELINE
+# python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=None --window_eval=true --inference_only=true # BASELINE
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=independent --model_training=None --window_eval=true --inference_only=true  # sasrec independent            
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=all_action --window_eval=true --inference_only=true # all action   
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=dense_all_action --window_eval=true --inference_only=true # dense all action        
