@@ -665,7 +665,7 @@ def evaluate_window_over_all(model, dataset, args, k_future_pos=7, top_N=10):
 
         # Get ranking positions of the items
         ranks = predictions.argsort().argsort()
-        rank_positions = ranks[:k_future_pos]
+        rank_positions = ranks[:k_future_pos].cpu().numpy()
 
         # Calculate NDCG and Hit Rate
         ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N) / k_future_pos # Devide by k_future_pos to normalize
@@ -740,7 +740,7 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
 
         # Get ranking positions of the items
         ranks = predictions.argsort().argsort()
-        rank_positions = ranks[:k_future_pos]
+        rank_positions = ranks[:k_future_pos].cpu().numpy()
 
         # Calculate NDCG and Hit Rate
         ndcg = sum(1 / np.log2(rank + 2) for rank in rank_positions if rank < top_N) / k_future_pos # divide by k_future_pos to normalize
