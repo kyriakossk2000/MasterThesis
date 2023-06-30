@@ -30,7 +30,6 @@ parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--window_size', default=7, type=int)                   # window size
 parser.add_argument('--window_eval', default=False, type=str2bool)          # window evaluation or not
 parser.add_argument('--window_eval_size', default=7, type=int)              # evaluate in the k position in the future 
-parser.add_argument('--all_action', default=False, type=str2bool)           # all action training
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
@@ -45,7 +44,7 @@ f.close()
 
 if __name__ == '__main__':
     print("Model training: ", args.model_training)
-    if args.model_training == 'all_action' or args.model_training == 'dense_all_action':
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
         pass
     else:
         print("Data partition: ", args.data_partition)
@@ -84,7 +83,21 @@ if __name__ == '__main__':
             if count >= 3:  # Change this to print more or fewer sequences
                 break
         sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size)
-
+    elif args.model_training == 'super_dense_all_action':
+        dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+        [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+        training_samples = user_input_seq
+        print("Super dense all action split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+        count = 0
+        for key, seq in user_input_seq.items():
+            print(f"User: {key},Train Sequence: {seq}")
+            print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Test for user {key}: ", user_test.get(key, []))
+            count += 1
+            if count >= 3:  # Change this to print more or fewer sequences
+                break
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size)
     else:  # SASRec next item
         if args.data_partition == 'independent':
             dataset = data_partition_window_independent(args.dataset, target_seq_percentage=0.9)
@@ -122,7 +135,7 @@ if __name__ == '__main__':
         cc += len(training_samples[u])
     print('average sequence length: %.2f' % (cc / len(training_samples)))
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-
+    
     model = SASRec(usernum, itemnum, args).to(args.device) 
     
     for name, param in model.named_parameters():

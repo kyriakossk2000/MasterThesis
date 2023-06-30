@@ -81,41 +81,46 @@ class WarpSampler(object):
 
 def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size):
     def sample():
-        pos_samples = window_size
-    
+        neg_samples = 10
         user = np.random.randint(1, usernum + 1)
         while len(user_train_seq[user]) <= 1:
             user = np.random.randint(1, usernum + 1)
-
         seq = np.zeros([maxlen], dtype=np.int32)  # interaction sequence
-
+        train_target_sampled = random.sample(train_target_seq[user], k=window_size) if len(train_target_seq[user]) > window_size else random.choices(train_target_seq[user], k=window_size)
         idx = maxlen - 1
-        ts = set(user_train_seq[user] + train_target_seq[user])
+        ts = set(user_train_seq[user] + train_target_sampled)
         if model_training == 'all_action':
-            neg_samples = 10
-            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
+            pos_samples = window_size
             pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
+            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
             for i in reversed(user_train_seq[user]):
                 seq[idx] = i 
                 if idx == maxlen - 1:
-                    # pad or truncate the train_target_seq[user] to make it of shape (7,)
-                    target_samples = train_target_seq[user][:pos_samples]
-                    target_samples += [0] * (pos_samples - len(target_samples))
-                    pos[idx] = target_samples
+                    pos[idx] = train_target_sampled
                     neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'dense_all_action':
-            neg_samples = 1
-            pos = np.zeros([maxlen], dtype=np.int32)
+            pos_samples = 1
+            pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
             neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
             for i in reversed(user_train_seq[user]):
                 seq[idx] = i 
-                random_target = random.sample(train_target_seq[user], 1)[0]
+                random_target = random.sample(train_target_sampled, 1)[0]
                 pos[idx] = random_target
                 neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
                 idx -= 1
                 if idx == -1: break
+        elif model_training == 'super_dense_all_action':
+            pos_samples = window_size
+            pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
+            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
+            for i in reversed(user_train_seq[user]):
+                seq[idx] = i 
+                pos[idx] = train_target_sampled
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                idx -= 1
+                if idx == -1: break 
 
         return user, seq, pos, neg
 
@@ -374,7 +379,7 @@ def data_partition_window_independent(fname, target_seq_percentage=0.9):
     train_samples = index
     return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum, train_samples]
 
-# -------- Partition with Window for Dense all action and All action ---------- #
+# -------- Partition with Window for Super, Dense all action and All action ---------- #
 def data_partition_window_all_action(fname, window_size=7, target_seq_percentage=0.9):
     train_start = target_seq_percentage
     usernum = 0

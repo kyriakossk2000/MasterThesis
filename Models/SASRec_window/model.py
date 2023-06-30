@@ -111,7 +111,7 @@ class SASRec(torch.nn.Module):
             pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
             neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
 
-        elif self.model_training == 'dense_all_action':
+        elif self.model_training == 'dense_all_action' or self.model_training == 'super_dense_all_action':
             # Convert positive and negative sequences to tensors and move them to the desired device
             pos_seqs_as_tensor = torch.LongTensor(pos_seqs).to(self.dev)
             neg_seqs_as_tensor = torch.LongTensor(neg_seqs).to(self.dev)
@@ -120,14 +120,18 @@ class SASRec(torch.nn.Module):
             pos_sample_embeddings = self.item_emb(pos_seqs_as_tensor)
             neg_sample_embeddings = self.item_emb(neg_seqs_as_tensor)
 
-            # Calculate the positive logits
-            pos_logits = (log_feats * pos_sample_embeddings).sum(dim=-1)
+            if self.model_training == 'dense_all_action':
+                # Calculate the positive logits
+                pos_logits = (log_feats * pos_sample_embeddings).sum(dim=-1)
 
-            # Expand the log_feats tensor dimension for matrix multiplication with neg_sample_embeddings
-            log_feats_expanded = log_feats.unsqueeze(2)
-            # Calculate the negative logits
-            neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
-            
+                # Expand the log_feats tensor dimension for matrix multiplication with neg_sample_embeddings
+                log_feats_expanded = log_feats.unsqueeze(2)
+                # Calculate the negative logits
+                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
+            elif self.model_training == 'super_dense_all_action':
+                log_feats_expanded = log_feats.unsqueeze(2)
+                pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)
+                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)            
         else:
             pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
             neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
