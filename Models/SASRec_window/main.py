@@ -35,6 +35,7 @@ parser.add_argument('--model_training', default=None, type=str)             # No
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
 
 
+
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
@@ -135,7 +136,7 @@ if __name__ == '__main__':
         cc += len(training_samples[u])
     print('average sequence length: %.2f' % (cc / len(training_samples)))
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-    
+
     model = SASRec(usernum, itemnum, args).to(args.device) 
     
     for name, param in model.named_parameters():
