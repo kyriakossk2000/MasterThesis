@@ -1,5 +1,6 @@
 import os
 import time
+from sampled_softmax import SampledSoftmaxLoss
 import torch
 import argparse
 from sam_optimizer.sam import SAM
@@ -33,7 +34,7 @@ parser.add_argument('--window_eval_size', default=7, type=int)              # ev
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
-
+parser.add_argument('--loss_type', default='bce', type=str)             # loss function
 
 
 args = parser.parse_args()
@@ -136,7 +137,7 @@ if __name__ == '__main__':
         cc += len(training_samples[u])
     print('average sequence length: %.2f' % (cc / len(training_samples)))
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
-
+    
     model = SASRec(usernum, itemnum, args).to(args.device) 
     
     for name, param in model.named_parameters():
@@ -196,7 +197,10 @@ if __name__ == '__main__':
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
-    bce_criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
+    if args.loss_type == 'bce':
+        criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
+    elif args.loss_type == 'sampled_softmax':
+        criterion = SampledSoftmaxLoss()
     if args.optimizer == 'sam':
         base_optimizer = torch.optim.Adam
         sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)
@@ -218,40 +222,42 @@ if __name__ == '__main__':
                 sam_optimizer.zero_grad()
                 if args.model_training == 'all_action':
                     indices = -1
-                    loss = bce_criterion(pos_logits, pos_labels)
-                    loss += bce_criterion(neg_logits, neg_labels)
+                    loss = criterion(pos_logits, pos_labels)
+                    loss += criterion(neg_logits, neg_labels)
                 else:
                     indices = np.where(pos != 0)
-                    loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                    loss = criterion(pos_logits[indices], pos_labels[indices])
+                    loss += criterion(neg_logits[indices], neg_labels[indices])
                 for param in model.item_emb.parameters():
                     loss += args.l2_emb * torch.norm(param)
                 loss.backward(retain_graph=True)
                 sam_optimizer.first_step(zero_grad=True)
                 # Second forward-backward pass
                 if args.model_training == 'all_action':
-                    loss = bce_criterion(pos_logits, pos_labels)
-                    loss += bce_criterion(neg_logits, neg_labels)
+                    loss = criterion(pos_logits, pos_labels)
+                    loss += criterion(neg_logits, neg_labels)
                 else:
-                    loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                    loss = criterion(pos_logits[indices], pos_labels[indices])
+                    loss += criterion(neg_logits[indices], neg_labels[indices])
                 
                 for param in model.item_emb.parameters():
                     loss += args.l2_emb * torch.norm(param)
                 loss.backward()
                 sam_optimizer.second_step(zero_grad=True)
                 print('SAMM')
-                exit()
             else:
                 adam_optimizer.zero_grad()
-                if args.model_training == 'all_action':
-                    indices = -1
-                    loss = bce_criterion(pos_logits, pos_labels)
-                    loss += bce_criterion(neg_logits, neg_labels)
+                if args.loss_type == 'sampled_softmax':
+                    loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
                 else:
-                    indices = np.where(pos != 0) 
-                    loss = bce_criterion(pos_logits[indices], pos_labels[indices]) 
-                    loss += bce_criterion(neg_logits[indices], neg_labels[indices])
+                    if args.model_training == 'all_action':
+                        indices = -1
+                        loss = criterion(pos_logits, pos_labels)
+                        loss += criterion(neg_logits, neg_labels)
+                    else:
+                        indices = np.where(pos != 0) 
+                        loss = criterion(pos_logits[indices], pos_labels[indices]) 
+                        loss += criterion(neg_logits[indices], neg_labels[indices])
 
                 for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
                 loss.backward()
