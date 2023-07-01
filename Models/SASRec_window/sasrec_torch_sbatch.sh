@@ -41,14 +41,17 @@ source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=independent --model_training=None --window_eval=true   # sasrec independent            
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=all_action --window_eval=true   # all action   
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=201 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=dense_all_action --window_eval=true  # dense all action 
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=super_dense_all_action --window_eval=true  # super dense all action 
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=super_dense_all_action --window_eval=true  # super dense all action 
+#S python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=teacher_forcing --model_training=None --window_eval=true   # sasrec teacher forcing            
+
 
 # FOR TRAINING with Sampled softmax loss
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=None --window_eval=true # BASELINE
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=independent --loss_type=sampled_softmax --model_training=None --window_eval=true   # sasrec independent            
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=all_action --window_eval=true   # all action   
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=dense_all_action --window_eval=true  # dense all action 
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=super_dense_all_action --window_eval=true  # super dense all action 
+#S python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=independent --loss_type=sampled_softmax --model_training=None --window_eval=true   # sasrec independent            
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=all_action --window_eval=true   # all action   
+#S python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=dense_all_action --window_eval=true  # dense all action 
+#S python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=super_dense_all_action --window_eval=true  # super dense all action 
+#S python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=teacher_forcing --loss_type=sampled_softmax --model_training=None --window_eval=true
 
 # FOR INFERENCE ONLY (NO TRAINING)
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=None --window_eval=true --inference_only=true # BASELINE
