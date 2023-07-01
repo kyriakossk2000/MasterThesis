@@ -92,7 +92,7 @@ class SASRec(torch.nn.Module):
 
     def forward(self, user_ids, log_seqs, pos_seqs, neg_seqs): # for training        
         log_feats = self.log2feats(log_seqs) # user_ids hasn't been used yet
-        
+    
         if self.model_training == 'all_action':
             final_embedding = log_feats[:, -1, :]  # get last embedding el
 
@@ -149,7 +149,5 @@ class SASRec(torch.nn.Module):
         item_embs = self.item_emb(torch.LongTensor(item_indices).to(self.dev)) # (U, I, C)
 
         logits = item_embs.matmul(final_feat.unsqueeze(-1)).squeeze(-1)
-
-        # preds = self.pos_sigmoid(logits) # rank same item list for different users
 
         return logits # preds # (U, I)

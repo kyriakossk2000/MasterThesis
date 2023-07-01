@@ -67,7 +67,7 @@ if __name__ == '__main__':
             if count >= 3:  # Change this to print more or fewer sequences
                 break
         
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size)
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
 
     elif args.model_training == 'dense_all_action':
         #sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
@@ -84,7 +84,7 @@ if __name__ == '__main__':
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size)
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
     elif args.model_training == 'super_dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
         [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
@@ -99,13 +99,27 @@ if __name__ == '__main__':
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size)
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
     else:  # SASRec next item
         if args.data_partition == 'independent':
             dataset = data_partition_window_independent(args.dataset, target_seq_percentage=0.9)
             [train_seq, user_train, user_valid, user_test, usernum, itemnum, train_samples] = dataset
             training_samples = train_seq
             print("Independent split:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
+            count = 0
+            for key, seq in train_seq.items():
+                print(f"User: {key}, Sequence: {seq}")
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Test for user {key}: ", user_test.get(key, []))
+                count += 1
+                if count >= 3:  # Change this to print more or fewer sequences
+                    break
+            sampler = WarpSampler(train_seq, train_samples, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
+        elif args.data_partition == 'teacher_forcing':
+            dataset = data_partition_window_teacher_forcing(args.dataset, target_seq_percentage=0.9)
+            [train_seq, user_train, user_valid, user_test, usernum, itemnum, train_samples] = dataset
+            training_samples = train_seq
+            print("Teacher forcing split:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
             count = 0
             for key, seq in train_seq.items():
                 print(f"User: {key}, Sequence: {seq}")
@@ -197,10 +211,11 @@ if __name__ == '__main__':
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
-    if args.loss_type == 'bce':
-        criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
-    elif args.loss_type == 'sampled_softmax':
+    if args.loss_type == 'sampled_softmax':
         criterion = SampledSoftmaxLoss()
+    else:
+        criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
+        
     if args.optimizer == 'sam':
         base_optimizer = torch.optim.Adam
         sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)

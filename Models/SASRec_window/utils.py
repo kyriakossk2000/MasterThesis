@@ -18,13 +18,14 @@ def random_neq(l, r, s):
 
 # sampler for batch generation for all action and dense all action
 # TODO this method here could use uniform negative sampling 
-def random_neq_all(l, r, s, count):
-    possible_numbers = list(set(range(l, r)) - set(s))
-    return np.random.choice(possible_numbers, count, replace=True)
-# def random_neq_all(l, r, s, count):
-#     possible_numbers = list(set(range(l, r)) - set(s))
-#     np.random.shuffle(possible_numbers)
-#     return possible_numbers[:count]
+def random_neq_all(l, r, s, count, loss_type):
+    if loss_type == 'sampled_softmax': # use uniform negative sampling 
+        possible_numbers = list(set(range(l, r)) - set(s))
+        return np.random.choice(possible_numbers, count, replace=True)
+    else:
+        possible_numbers = list(set(range(l, r)) - set(s))
+        np.random.shuffle(possible_numbers)
+        return possible_numbers[:count]
 
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
@@ -83,9 +84,9 @@ class WarpSampler(object):
             p.terminate()
             p.join()
 
-def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size):
+def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, loss_type):
     def sample():
-        neg_samples = 10
+        neg_samples = window_size
         user = np.random.randint(1, usernum + 1)
         while len(user_train_seq[user]) <= 1:
             user = np.random.randint(1, usernum + 1)
@@ -101,7 +102,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                 seq[idx] = i 
                 if idx == maxlen - 1:
                     pos[idx] = train_target_sampled
-                    neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                    neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'dense_all_action':
@@ -112,7 +113,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                 seq[idx] = i 
                 random_target = random.sample(train_target_sampled, 1)[0]
                 pos[idx] = random_target
-                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'super_dense_all_action':
@@ -122,10 +123,10 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
             for i in reversed(user_train_seq[user]):
                 seq[idx] = i 
                 pos[idx] = train_target_sampled
-                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
                 idx -= 1
                 if idx == -1: break 
-
+        
         return user, seq, pos, neg
 
     np.random.seed(SEED)
@@ -138,7 +139,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
 
 # All action and Dense all action sampler based on Pinnerformer 
 class WarpSamplerAll(object):
-    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, model_training='all_action', window_size=7):
+    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, model_training='all_action', window_size=7, loss_type='bce'):
         self.result_queue = Queue(maxsize=n_workers * 10)
         self.processors = []
         for i in range(n_workers):
@@ -152,7 +153,8 @@ class WarpSamplerAll(object):
                                                         self.result_queue,
                                                         np.random.randint(2e9),
                                                         model_training,
-                                                        window_size
+                                                        window_size,
+                                                        loss_type
                                                         )))
             self.processors[-1].daemon = True
             self.processors[-1].start()
@@ -382,6 +384,61 @@ def data_partition_window_independent(fname, target_seq_percentage=0.9):
 
     train_samples = index
     return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum, train_samples]
+
+
+def data_partition_window_teacher_forcing(fname, target_seq_percentage=0.9):
+    usernum = 0
+    itemnum = 0
+    train_samples = 0
+    User = defaultdict(list)
+    user_train = {}
+    user_train_seq = {}
+    user_valid = {}
+    user_test = {}
+    # assume user/item index starting from 1
+    f = open('data/%s.txt' % fname, 'r')
+    for line in f:
+        u, i = line.rstrip().split(' ')
+        u = int(u)
+        i = int(i)
+        usernum = max(u, usernum)
+        itemnum = max(i, itemnum)
+        User[u].append(i)
+    # create partitions
+    index = 0
+    for user in User:
+        nfeedback = len(User[user])
+        
+        if nfeedback < 3:
+            user_train[user] = User[user]
+            user_valid[user] = []
+            user_test[user] = []
+        else:
+            seq_len = len(User[user]) - 2  # exclude the last two elements from the sequence
+            valid_index = int(seq_len * 0.8)  # index that corresponds to approximately 80% of the sequence length
+            test_index = int(seq_len * 0.9)
+
+            train_seq = User[user][:valid_index]
+            valid_seq = User[user][valid_index:test_index]
+            test_seq = User[user][test_index:]
+            # splitting training sequence into input and target sequences based on the given target sequence percentage
+            split_index = int(len(train_seq) * target_seq_percentage)
+            input_seq = train_seq[:split_index]
+            target_seq = train_seq[split_index:]
+
+            temp_input = input_seq.copy()
+            for single_target in target_seq:
+                temp_input.append(single_target)
+                index += 1
+                user_train[index] = temp_input.copy()
+
+            user_train_seq[user] = train_seq
+            user_valid[user] = valid_seq
+            user_test[user] = test_seq
+
+    train_samples = index
+    return [user_train, user_train_seq, user_valid, user_test, usernum, itemnum, train_samples]
+
 
 # -------- Partition with Window for Super, Dense all action and All action ---------- #
 def data_partition_window_all_action(fname, window_size=7, target_seq_percentage=0.9):
