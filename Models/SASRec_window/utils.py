@@ -18,13 +18,13 @@ def random_neq(l, r, s):
 
 # sampler for batch generation for all action and dense all action
 # TODO this method here could use uniform negative sampling 
-# def random_neq_all(l, r, s, count):
-#     possible_numbers = list(set(range(l, r)) - set(s))
-#     return np.random.choice(possible_numbers, count, replace=True)
 def random_neq_all(l, r, s, count):
     possible_numbers = list(set(range(l, r)) - set(s))
-    np.random.shuffle(possible_numbers)
-    return possible_numbers[:count]
+    return np.random.choice(possible_numbers, count, replace=True)
+# def random_neq_all(l, r, s, count):
+#     possible_numbers = list(set(range(l, r)) - set(s))
+#     np.random.shuffle(possible_numbers)
+#     return possible_numbers[:count]
 
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
