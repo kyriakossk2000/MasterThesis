@@ -34,7 +34,8 @@ parser.add_argument('--window_eval_size', default=7, type=int)              # ev
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
-parser.add_argument('--loss_type', default='bce', type=str)             # loss function
+parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
+parser.add_argument('--training_strategy', default='default', type=str)     # training strategy
 
 
 args = parser.parse_args()
@@ -279,7 +280,7 @@ if __name__ == '__main__':
                 adam_optimizer.step()
                 print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
         
-        if epoch % 20 == 0:
+        if epoch % 40 == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
