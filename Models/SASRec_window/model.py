@@ -121,11 +121,10 @@ class SASRec(torch.nn.Module):
             neg_sample_embeddings = self.item_emb(neg_seqs_as_tensor)
 
             if self.model_training == 'dense_all_action':
-                # Calculate the positive logits
-                pos_logits = (log_feats * pos_sample_embeddings).sum(dim=-1)
-
                 # Expand the log_feats tensor dimension for matrix multiplication with neg_sample_embeddings
                 log_feats_expanded = log_feats.unsqueeze(2)
+                # Calculate the positive logits
+                pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)                
                 # Calculate the negative logits
                 neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
             elif self.model_training == 'super_dense_all_action':
