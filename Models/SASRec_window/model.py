@@ -136,22 +136,23 @@ class SASRec(torch.nn.Module):
         else:
             pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
             neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
-            pos_logits = []
-            neg_logits = []
+            pos_logits = (log_feats * pos_embs).sum(dim=-1)
+            neg_logits = (log_feats * neg_embs).sum(dim=-1)
+            # pos_logits = []
+            # neg_logits = []
 
-            # Loop over sequence length
-            for t in range(log_feats.shape[1]): # <-- Modification here
-                pos_logits_t = (log_feats[:, t, :] * pos_embs[:, t, :]).sum(dim=-1) # <-- Modification here
-                neg_logits_t = (log_feats[:, t, :] * neg_embs[:, t, :]).sum(dim=-1) # <-- Modification here
+            # # Loop over sequence length
+            # for t in range(log_feats.shape[1]): # <-- Modification here
+            #     pos_logits_t = (log_feats[:, t, :] * pos_embs[:, t, :]).sum(dim=-1) # <-- Modification here
+            #     neg_logits_t = (log_feats[:, t, :] * neg_embs[:, t, :]).sum(dim=-1) # <-- Modification here
                 
-                pos_logits.append(pos_logits_t)
-                neg_logits.append(neg_logits_t)
+            #     pos_logits.append(pos_logits_t)
+            #     neg_logits.append(neg_logits_t)
 
-            pos_logits = torch.stack(pos_logits, dim=1)
-            neg_logits = torch.stack(neg_logits, dim=1)
+            # pos_logits = torch.stack(pos_logits, dim=1)
+            # neg_logits = torch.stack(neg_logits, dim=1)
             # kame comment ta poupano os jame pou en ta list creation je uncomment to poukato 
-            # pos_logits = (log_feats * pos_embs).sum(dim=-1)
-            # neg_logits = (log_feats * neg_embs).sum(dim=-1)
+            
 
         return pos_logits, neg_logits # pos_pred, neg_pred
 
