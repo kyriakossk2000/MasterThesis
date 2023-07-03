@@ -86,16 +86,19 @@ class WarpSampler(object):
 
 def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, loss_type):
     def sample():
-        neg_samples = window_size
+        #neg_samples = window_size
+        neg_samples = 16
         user = np.random.randint(1, usernum + 1)
         while len(user_train_seq[user]) <= 1:
             user = np.random.randint(1, usernum + 1)
         seq = np.zeros([maxlen], dtype=np.int32)  # interaction sequence
-        train_target_sampled = random.sample(train_target_seq[user], k=window_size) if len(train_target_seq[user]) > window_size else random.choices(train_target_seq[user], k=window_size)
+        #train_target_sampled = random.sample(train_target_seq[user], k=window_size) if len(train_target_seq[user]) > window_size else random.choices(train_target_seq[user], k=window_size)
+        train_target_sampled = random.sample(train_target_seq[user], k=16) if len(train_target_seq[user]) > 16 else random.choices(train_target_seq[user], k=16)
+
         idx = maxlen - 1
         ts = set(user_train_seq[user] + train_target_sampled)
         if model_training == 'all_action':
-            pos_samples = window_size
+            pos_samples = 16
             pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
             neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
             for i in reversed(user_train_seq[user]):
