@@ -628,7 +628,7 @@ def data_partition_window_rolling(fname, window_size=2, target_seq_percentage=0.
 
 # Eval over window per step into the future 
 def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
-    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling':
         [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     elif args.data_partition == None or args.data_partition == 'None':
         [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
@@ -722,7 +722,7 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
     return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, avg_kendall_tau
 
 def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
-    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling':
         [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     elif args.data_partition == None or args.data_partition == 'None':
         [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
