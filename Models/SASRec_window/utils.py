@@ -101,13 +101,12 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
             pos_samples = window_size
             #pos_samples = 16
             pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
-            neg = np.zeros([maxlen], dtype=np.int32)
+            neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
             for i in reversed(user_train_seq[user]):
                 seq[idx] = i 
                 if idx == maxlen - 1:
                     pos[idx] = train_target_sampled
-                    neg[idx] = random_neq(1, itemnum + 1, ts)
-                    #neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
+                    neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'dense_all_action':
@@ -161,6 +160,66 @@ class WarpSamplerAll(object):
                                                         window_size,
                                                         loss_type
                                                         )))
+            self.processors[-1].daemon = True
+            self.processors[-1].start()
+
+    def next_batch(self):
+        return self.result_queue.get()
+
+    def close(self):
+        for p in self.processors:
+            p.terminate()
+            p.join()
+
+def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, window_size=7, loss_type='bce'):
+    def sample():
+        user = np.random.randint(1, usernum + 1)
+        while len(user_input_seq[user]) <= 1:
+            user = np.random.randint(1, usernum + 1)
+        
+        seq = np.zeros([maxlen], dtype=np.int32)
+        pos = np.zeros([maxlen, window_size], dtype=np.int32)
+        neg = np.zeros([maxlen, window_size], dtype=np.int32)
+        
+        idx = maxlen - 1
+
+        ts = set(user_input_seq[user])
+        for i, input_item in enumerate(reversed(user_input_seq[user])):
+            seq[idx] = input_item
+            pos[idx] = user_target_seq[user][i]
+            for j in range(window_size):
+                neg[idx,j] = random_neq(1, itemnum + 1, ts)
+            idx -= 1
+            if idx == -1: break
+                
+        return (user, seq, pos, neg)
+
+    np.random.seed(SEED)
+    while True:
+        one_batch = []
+        for i in range(batch_size):
+            one_batch.append(sample())
+
+        result_queue.put(zip(*one_batch))
+
+
+class WarpSamplerRolling(object):
+    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, window_size=7, loss_type='bce'):
+        self.result_queue = Queue(maxsize=n_workers * 10)
+        self.processors = []
+        for i in range(n_workers):
+            self.processors.append(
+                Process(target=sample_function_rolling, args=(user_input_seq,
+                                                      user_target_seq,
+                                                      usernum,
+                                                      itemnum,
+                                                      batch_size,
+                                                      maxlen,
+                                                      self.result_queue,
+                                                      np.random.randint(2e9),
+                                                      window_size,
+                                                      loss_type
+                                                      )))
             self.processors[-1].daemon = True
             self.processors[-1].start()
 
@@ -500,6 +559,70 @@ def data_partition_window_all_action(fname, window_size=7, target_seq_percentage
             user_train[user] = train_seq
             user_valid[user] = valid_seq
             user_test[user] = test_seq
+
+    return [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum]
+
+def data_partition_window_rolling(fname, window_size=2, target_seq_percentage=0.9):
+    train_start = target_seq_percentage
+    usernum = 0
+    itemnum = 0
+    User = defaultdict(list)
+    user_input = {}
+    user_target = {}
+    user_train = {}
+    user_valid = {}
+    user_test = {}
+
+    # Function to create rolling windows
+    def create_rolling_window_sequences(seq, window_size):
+        input_seqs = []
+        target_seqs = []
+        for i in range(len(seq)):
+            input_seqs.append(seq[i])
+            targets = seq[i+1:i+1+window_size]
+            while len(targets) < window_size:
+                targets.append(targets[-1] if targets else seq[i])
+            target_seqs.append(targets)
+        return input_seqs, target_seqs
+
+    # Reading file and processing users and items
+    with open('data/%s.txt' % fname, 'r') as f:
+        for line in f:
+            u, i = line.rstrip().split(' ')
+            u = int(u)
+            i = int(i)
+            usernum = max(u, usernum)
+            itemnum = max(i, itemnum)
+            User[u].append(i)
+    
+    # Creating train, validation, and test sets
+    for user in User:
+        nfeedback = len(User[user])
+
+        if nfeedback < 3:
+            user_train[user] = User[user]
+            user_valid[user] = []
+            user_test[user] = []
+        else:
+            seq_len = len(User[user]) - 2
+            valid_index = int(seq_len * 0.8)
+            test_index = int(seq_len * 0.9)
+
+            train_seq = User[user][:valid_index]
+            valid_seq = User[user][valid_index:test_index]
+            test_seq = User[user][test_index:]
+
+            # Create rolling windows for input and target sequences
+            input_train, target_train = create_rolling_window_sequences(train_seq, window_size)
+            input_valid, target_valid = create_rolling_window_sequences(valid_seq, window_size)
+            input_test, target_test = create_rolling_window_sequences(test_seq, window_size)
+            
+            # Assign sequences to respective dictionaries
+            user_input[user] = input_train
+            user_target[user] = target_train
+            user_train[user] = input_train
+            user_valid[user] = input_valid
+            user_test[user] = input_test
 
     return [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum]
 

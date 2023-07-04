@@ -37,7 +37,6 @@ parser.add_argument('--optimizer', default='adam', type=str)                # op
 parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
 parser.add_argument('--training_strategy', default='default', type=str)     # training strategy
 
-
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
@@ -47,13 +46,12 @@ f.close()
 
 if __name__ == '__main__':
     print("Model training: ", args.model_training)
-    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling':
         pass
     else:
         print("Data partition: ", args.data_partition)
     # load dataset
     if args.model_training == 'all_action':
-        #sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
         [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
         training_samples = user_input_seq
@@ -71,7 +69,6 @@ if __name__ == '__main__':
         sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
 
     elif args.model_training == 'dense_all_action':
-        #sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
         [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
         training_samples = user_input_seq
@@ -101,6 +98,23 @@ if __name__ == '__main__':
             if count >= 3:  # Change this to print more or fewer sequences
                 break
         sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
+    
+    elif args.model_training == 'future_rolling':
+        dataset = data_partition_window_rolling(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+        [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+        training_samples = user_input_seq
+        print("Future window rolling:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+        count = 0
+        for key, seq in user_input_seq.items():
+            print(f"User: {key},Train Sequence: {seq}")
+            print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Test for user {key}: ", user_test.get(key, []))
+            count += 1
+            if count >= 3:  # Change this to print more or fewer sequences
+                break
+            sampler = WarpSamplerRolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, window_size=args.window_size, loss_type=args.loss_type)
+        
     else:  # SASRec next item
         if args.data_partition == 'independent':
             dataset = data_partition_window_independent(args.dataset, target_seq_percentage=0.9)
@@ -214,9 +228,12 @@ if __name__ == '__main__':
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
         criterion = SampledSoftmaxLoss()
+    elif args.loss_type == 'cross_entropy':
+        criterion = torch.nn.CrossEntropyLoss()
     else:
-        criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
-        
+        criterion = torch.nn.BCEWithLogitsLoss() 
+    print('Loss type: ', args.loss_type)
+    
     if args.optimizer == 'sam':
         base_optimizer = torch.optim.Adam
         sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)
@@ -233,7 +250,8 @@ if __name__ == '__main__':
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
-            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
+            if args.loss_type != 'ce_over':
+                pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
                 sam_optimizer.zero_grad()
                 if args.model_training == 'all_action':
@@ -265,9 +283,28 @@ if __name__ == '__main__':
                 adam_optimizer.zero_grad()
                 if args.loss_type == 'sampled_softmax':
                     loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
+                elif args.loss_type == 'ce_over':
+                    loss = 0
+                    for i in range(args.window_size):
+                        if args.model_training == 'all_action':
+                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                            logits = torch.cat((pos_logits[i], neg_logits[i]), dim=0)
+                            labels = torch.cat((pos_labels, neg_labels), dim=0)
+                            for j in range(1,len(neg_logits)):
+                                logits = torch.cat((logits, neg_logits[j]), dim=0)
+                                labels = torch.cat((labels, neg_labels), dim=0)
+                        else:
+                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                            indices = np.where(pos[:,:,i] != 0)
+                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                            for j in range(1,len(neg_logits)):
+                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                        loss += criterion(logits, labels)
+                    loss = loss / args.window_size   # avg over window size 
                 else:
                     if args.model_training == 'all_action':
-                        indices = -1
                         loss = criterion(pos_logits, pos_labels)
                         loss += criterion(neg_logits, neg_labels)
                     else:
