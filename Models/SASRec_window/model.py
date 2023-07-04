@@ -31,6 +31,8 @@ class SASRec(torch.nn.Module):
         self.dev = args.device
         self.model_training = args.model_training
         self.training_strategy=args.training_strategy
+        self.window_size=args.window_size
+        self.loss_type=args.loss_type
 
         # https://stackoverflow.com/questions/42704283/adding-l1-l2-regularization-in-pytorch
         self.item_emb = torch.nn.Embedding(self.item_num+1, args.hidden_units, padding_idx=0)
@@ -96,22 +98,40 @@ class SASRec(torch.nn.Module):
         log_feats = self.log2feats(log_seqs) # user_ids hasn't been used yet
         
         if self.model_training == 'all_action':
-            final_embedding = log_feats[:, -1, :]  # get last embedding el
+            final_embedding = log_feats[:, -1, :]  # get last embedding element
+            final_embedding_expanded = final_embedding.unsqueeze(1)
 
-            # Convert sequences to tensors and move them to the desired device
             pos_seqs_tensor = torch.LongTensor(pos_seqs).to(self.dev)
             neg_seqs_tensor = torch.LongTensor(neg_seqs).to(self.dev)
             
-            # Get embeddings of the positive and negative samples (last elements)
-            pos_samples_embeddings = self.item_emb(pos_seqs_tensor)[:, -1, :]
-            neg_samples_embeddings = self.item_emb(neg_seqs_tensor)[:, -1, :]
+            # if using cross_entropy loss
+            if self.loss_type == 'ce_over':
+                pos_logits_list = []
+                neg_logits_list = []
+
+                for i in range(self.window_size):
+                    # Get embeddings of the positive and negative samples at the current position
+                    pos_samples_embeddings = self.item_emb(pos_seqs_tensor[:, i])
+                    neg_samples_embeddings = self.item_emb(neg_seqs_tensor[:, i])
+                    
+                    # Calculate the logits
+                    pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
+                    neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
+                    
+                    # Append logits to lists
+                    pos_logits_list.append(pos_logits)
+                    neg_logits_list.append(neg_logits)
+
+                return pos_logits_list, neg_logits_list
             
-            # Unsqueeze final_embedding for matrix multiplication
-            final_embedding_expanded = final_embedding.unsqueeze(1)
+            # else use bce
+            else:
+                pos_samples_embeddings = self.item_emb(pos_seqs_tensor)
+                neg_samples_embeddings = self.item_emb(neg_seqs_tensor)
+                
+                pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
+                neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
             
-            # Calculate the logits
-            pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
-            neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
 
         elif self.model_training == 'dense_all_action' or self.model_training == 'super_dense_all_action':
             # Convert positive and negative sequences to tensors and move them to the desired device
@@ -132,7 +152,25 @@ class SASRec(torch.nn.Module):
             elif self.model_training == 'super_dense_all_action':
                 log_feats_expanded = log_feats.unsqueeze(2)
                 pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)
-                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)            
+                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1) 
+        elif self.model_training == 'future_rolling':
+            # Loop through each position in the prediction window
+            pos_logits_list = []
+            neg_logits_list = []
+            
+            for i in range(self.window_size):
+                pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                pos_logits = (log_feats * pos_embs).sum(dim=-1)
+                neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                pos_logits_list.append(pos_logits)
+                neg_logits_list.append(neg_logits)
+            if self.loss_type == 'ce_over':
+                return pos_logits_list, neg_logits_list 
+            else:
+                pos_logits = torch.stack(pos_logits_list, dim=-1)
+                neg_logits = torch.stack(neg_logits_list, dim=-1)
+                                   
         else:
             pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
             neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
@@ -166,3 +204,13 @@ class SASRec(torch.nn.Module):
         logits = item_embs.matmul(final_feat.unsqueeze(-1)).squeeze(-1)
 
         return logits # preds # (U, I)
+
+
+# for i in range(self.window_size):
+#     pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+#     pos_logits = (log_feats * pos_embs).sum(dim=-1)
+#     neg_logits = []
+#     for j in range(self.window_size):
+#         neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
+#         neg_logQ = torch.zeros(neg_seq[:, :, 0].shape)
+#         for batch_i in range(128):
