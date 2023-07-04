@@ -302,7 +302,7 @@ if __name__ == '__main__':
                                 logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
                                 labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         loss += criterion(logits, labels)
-                    loss = loss / args.window_size   # avg over window size 
+                    loss = loss.mean()  # avg over window size 
                 else:
                     if args.model_training == 'all_action':
                         loss = criterion(pos_logits, pos_labels)
