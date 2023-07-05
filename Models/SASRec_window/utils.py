@@ -86,7 +86,7 @@ class WarpSampler(object):
 
 def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, loss_type):
     def sample():
-        neg_samples = window_size
+        neg_samples = 16
         #neg_samples = 16
         user = np.random.randint(1, usernum + 1)
         while len(user_train_seq[user]) <= 1:
