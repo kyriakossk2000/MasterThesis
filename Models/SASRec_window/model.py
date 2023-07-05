@@ -105,32 +105,34 @@ class SASRec(torch.nn.Module):
             neg_seqs_tensor = torch.LongTensor(neg_seqs).to(self.dev)
             
             # if using cross_entropy loss
-            if self.loss_type == 'ce_over':
-                pos_logits_list = []
-                neg_logits_list = []
+            #if self.loss_type == 'ce_over':
+            pos_logits_list = []
+            neg_logits_list = []
 
-                for i in range(self.window_size):
-                    # Get embeddings of the positive and negative samples at the current position
-                    pos_samples_embeddings = self.item_emb(pos_seqs_tensor[:, i])
-                    neg_samples_embeddings = self.item_emb(neg_seqs_tensor[:, i])
-                    
-                    # Calculate the logits
-                    pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
-                    neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
-                    
-                    # Append logits to lists
-                    pos_logits_list.append(pos_logits)
-                    neg_logits_list.append(neg_logits)
-
-                return pos_logits_list, neg_logits_list
-            
-            # else use bce
-            else:
-                pos_samples_embeddings = self.item_emb(pos_seqs_tensor)
-                neg_samples_embeddings = self.item_emb(neg_seqs_tensor)
+            for i in range(self.window_size):
+                # Get embeddings of the positive and negative samples at the current position
+                pos_samples_embeddings = self.item_emb(pos_seqs_tensor[:, i])
+                neg_samples_embeddings = self.item_emb(neg_seqs_tensor[:, i])
                 
+                # Calculate the logits
                 pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
                 neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
+                
+                # Append logits to lists
+                pos_logits_list.append(pos_logits)
+                neg_logits_list.append(neg_logits)
+            pos_logits = torch.stack(pos_logits_list, dim=-1)
+            neg_logits = torch.stack(neg_logits_list, dim=-1)
+
+            return pos_logits, neg_logits
+            
+            # else use bce
+            # else:
+            #     pos_samples_embeddings = self.item_emb(pos_seqs_tensor)
+            #     neg_samples_embeddings = self.item_emb(neg_seqs_tensor)
+                
+            #     pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
+            #     neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
             
 
         elif self.model_training == 'dense_all_action' or self.model_training == 'super_dense_all_action':
