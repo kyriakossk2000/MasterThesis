@@ -228,7 +228,7 @@ if __name__ == '__main__':
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
         criterion = SampledSoftmaxLoss()
-    elif args.loss_type == 'cross_entropy':
+    elif args.loss_type == 'ce_over':
         criterion = torch.nn.CrossEntropyLoss()
     else:
         criterion = torch.nn.BCEWithLogitsLoss() 
