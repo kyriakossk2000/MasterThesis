@@ -228,7 +228,7 @@ if __name__ == '__main__':
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
         criterion = SampledSoftmaxLoss()
-    elif args.loss_type == 'ce_over':
+    elif args.loss_type == 'cross_entropy':
         criterion = torch.nn.CrossEntropyLoss()
     else:
         criterion = torch.nn.BCEWithLogitsLoss() 
@@ -288,11 +288,12 @@ if __name__ == '__main__':
                     for i in range(args.window_size):
                         if args.model_training == 'all_action':
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                            logits = torch.cat((pos_logits[i], neg_logits[i]), dim=0)
-                            labels = torch.cat((pos_labels, neg_labels), dim=0)
+                            indices = np.where(pos[:,:,i] != 0)
+                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
                             for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[j]), dim=0)
-                                labels = torch.cat((labels, neg_labels), dim=0)
+                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         else:
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
                             indices = np.where(pos[:,:,i] != 0)

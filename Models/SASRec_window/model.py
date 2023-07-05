@@ -100,9 +100,6 @@ class SASRec(torch.nn.Module):
         if self.model_training == 'all_action':
             final_embedding = log_feats[:, -1, :]  # get last embedding element
             final_embedding_expanded = final_embedding.unsqueeze(1)
-
-            pos_seqs_tensor = torch.LongTensor(pos_seqs).to(self.dev)
-            neg_seqs_tensor = torch.LongTensor(neg_seqs).to(self.dev)
             
             # if using cross_entropy loss
             if self.loss_type == 'ce_over':
@@ -110,24 +107,20 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 for i in range(self.window_size):
-                    # Get embeddings of the positive and negative samples at the current position
-                    pos_samples_embeddings = self.item_emb(pos_seqs_tensor[:, i])
-                    neg_samples_embeddings = self.item_emb(neg_seqs_tensor[:, i])
+                    pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
+                    neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
                     
-                    # Calculate the logits
                     pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
                     neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
                     
-                    # Append logits to lists
                     pos_logits_list.append(pos_logits)
                     neg_logits_list.append(neg_logits)
 
                 return pos_logits_list, neg_logits_list
             
-            # else use bce
             else:
-                pos_samples_embeddings = self.item_emb(pos_seqs_tensor)[:,-1,:]
-                neg_samples_embeddings = self.item_emb(neg_seqs_tensor)[:,-1,:]
+                pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))[:,-1,:]
+                neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))[:,-1,:]
                 
                 pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
                 neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)

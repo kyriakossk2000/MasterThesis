@@ -191,7 +191,7 @@ def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, b
                 neg[idx,j] = random_neq(1, itemnum + 1, ts)
             idx -= 1
             if idx == -1: break
-                
+        
         return (user, seq, pos, neg)
 
     np.random.seed(SEED)
