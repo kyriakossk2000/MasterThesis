@@ -250,8 +250,8 @@ if __name__ == '__main__':
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
-            if args.loss_type != 'ce_over':
-                pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
+            #if args.loss_type != 'ce_over':
+            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
                 sam_optimizer.zero_grad()
                 if args.model_training == 'all_action':
@@ -290,9 +290,9 @@ if __name__ == '__main__':
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
                             logits = torch.cat((pos_logits[i], neg_logits[i]), dim=0)
                             labels = torch.cat((pos_labels, neg_labels), dim=0)
-                            # for j in range(1,len(neg_logits)):
-                            #     logits = torch.cat((logits, neg_logits[j]), dim=0)
-                            #     labels = torch.cat((labels, neg_labels), dim=0)
+                            for j in range(1,len(neg_logits)):
+                                logits = torch.cat((logits, neg_logits[j]), dim=0)
+                                labels = torch.cat((labels, neg_labels), dim=0)
                         else:
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
                             indices = np.where(pos[:,:,i] != 0)
