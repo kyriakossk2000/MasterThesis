@@ -110,8 +110,8 @@ class SASRec(torch.nn.Module):
                     pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
                     neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
                     
-                    pos_logits = (final_embedding_expanded * pos_samples_embeddings).sum(dim=-1)
-                    neg_logits = (final_embedding_expanded * neg_samples_embeddings).sum(dim=-1)
+                    pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                    neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
                     
                     pos_logits_list.append(pos_logits)
                     neg_logits_list.append(neg_logits)
