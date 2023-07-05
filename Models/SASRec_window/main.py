@@ -250,8 +250,8 @@ if __name__ == '__main__':
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
-            #if args.loss_type != 'ce_over':
-            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
+            if args.loss_type != 'ce_over':
+                pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
                 sam_optimizer.zero_grad()
                 if args.model_training == 'all_action':
