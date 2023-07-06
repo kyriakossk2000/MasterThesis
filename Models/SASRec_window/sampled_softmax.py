@@ -37,17 +37,18 @@ class SampledSoftmaxLossOver(torch.nn.Module):
         self.temperature = temperature
 
     def forward(self, pos_logits_list, neg_logits_list, neg_logQ_list):
-
+        
         assert len(pos_logits_list) == len(neg_logits_list) == len(neg_logQ_list)
         
         total_loss = 0.0
         
         # iter over the window size
         for pos_logits, neg_logits, neg_logQ in zip(pos_logits_list, neg_logits_list, neg_logQ_list):
+
             # compute s(u_i, p_i) and s(u_i, n_j)
             s_pos = pos_logits / self.temperature
             s_neg = neg_logits / self.temperature
-
+            
             corrected_s_pos = s_pos - neg_logQ  # neg_logQ is log(Q_i(p_i))
             corrected_s_neg = s_neg - neg_logQ  # neg_logQ is log(Q_i(n_j))
             

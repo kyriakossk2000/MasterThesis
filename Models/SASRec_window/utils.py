@@ -18,14 +18,10 @@ def random_neq(l, r, s):
 
 # sampler for batch generation for all action and dense all action
 # TODO this method here could use uniform negative sampling 
-def random_neq_all(l, r, s, count, loss_type):
-    if loss_type == 'sampled_softmax': # use uniform negative sampling 
-        possible_numbers = list(set(range(l, r)) - set(s))
-        return np.random.choice(possible_numbers, count, replace=True)
-    else:
-        possible_numbers = list(set(range(l, r)) - set(s))
-        np.random.shuffle(possible_numbers)
-        return possible_numbers[:count]
+def random_neq_all(l, r, s, count):
+    possible_numbers = list(set(range(l, r)) - set(s))
+    np.random.shuffle(possible_numbers)
+    return possible_numbers[:count]
 
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
@@ -106,7 +102,8 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                 seq[idx] = i 
                 if idx == maxlen - 1:
                     pos[idx] = train_target_sampled
-                    neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
+                    for j in range(neg_samples):
+                        neg[idx,j] = random_neq(1, itemnum + 1, ts)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'dense_all_action':
@@ -117,7 +114,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                 seq[idx] = i 
                 random_target = random.sample(train_target_sampled, 1)[0]
                 pos[idx] = random_target
-                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
                 idx -= 1
                 if idx == -1: break
         elif model_training == 'super_dense_all_action':
@@ -127,7 +124,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
             for i in reversed(user_train_seq[user]):
                 seq[idx] = i 
                 pos[idx] = train_target_sampled
-                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples, loss_type)
+                neg[idx] = random_neq_all(1, itemnum + 1, ts, neg_samples)
                 idx -= 1
                 if idx == -1: break 
         
@@ -176,18 +173,18 @@ def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, b
         user = np.random.randint(1, usernum + 1)
         while len(user_input_seq[user]) <= 1:
             user = np.random.randint(1, usernum + 1)
-        
+        neg_samples = window_size
+
         seq = np.zeros([maxlen], dtype=np.int32)
         pos = np.zeros([maxlen, window_size], dtype=np.int32)
-        neg = np.zeros([maxlen, window_size], dtype=np.int32)
-        
+        neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
         idx = maxlen - 1
 
         ts = set(user_input_seq[user])
         for i, input_item in enumerate(reversed(user_input_seq[user])):
             seq[idx] = input_item
             pos[idx] = user_target_seq[user][i]
-            for j in range(window_size):
+            for j in range(neg_samples):
                 neg[idx,j] = random_neq(1, itemnum + 1, ts)
             idx -= 1
             if idx == -1: break
