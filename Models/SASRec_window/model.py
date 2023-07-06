@@ -118,6 +118,25 @@ class SASRec(torch.nn.Module):
 
                 return pos_logits_list, neg_logits_list
             
+            elif self.loss_type == 'sampled_softmax':
+                pos_logits_list = []
+                neg_logits_list = []
+                neg_logQ_list = []
+
+                for i in range(self.window_size):
+                    pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                    pos_logits_list.append((log_feats * pos_embs).sum(dim=-1))
+                for j in range(neg_seqs.shape[2]):
+                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
+                    neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
+                    for k in range(128):
+                        unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
+                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
+                        neg_logQ[k] = torch.log(probs).sum(dim=0)
+                    neg_logQ_list.append(neg_logQ)
+                    neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
+
+                return pos_logits_list, neg_logits_list, neg_logQ_list
             else:
                 pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))[:,-1,:]
                 neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))[:,-1,:]
@@ -150,17 +169,37 @@ class SASRec(torch.nn.Module):
             # Loop through each position in the prediction window
             pos_logits_list = []
             neg_logits_list = []
-            
+            neg_logQ_list = []
+
             for i in range(self.window_size):
                 pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-                neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
                 pos_logits = (log_feats * pos_embs).sum(dim=-1)
-                neg_logits = (log_feats * neg_embs).sum(dim=-1)
                 pos_logits_list.append(pos_logits)
-                neg_logits_list.append(neg_logits)
+
             if self.loss_type == 'ce_over':
+                for j in range(neg_seqs.shape[2]):    
+                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                    neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                    neg_logits_list.append(neg_logits)
                 return pos_logits_list, neg_logits_list 
+            elif self.loss_type == 'sampled_softmax':
+                for j in range(neg_seqs.shape[2]):
+                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                    neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                    neg_logits_list.append(neg_logits)
+                    neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
+                    for k in range(128):
+                        unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
+                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
+                        neg_logQ[k] = torch.log(probs).sum(dim=0)
+                    neg_logQ_list.append(neg_logQ)
+                
+                return pos_logits_list, neg_logits_list, neg_logQ_list
             else:
+                for j in range(neg_seqs.shape[2]):
+                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                    neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                    neg_logits_list.append(neg_logits)
                 pos_logits = torch.stack(pos_logits_list, dim=-1)
                 neg_logits = torch.stack(neg_logits_list, dim=-1)
                                    
@@ -197,13 +236,3 @@ class SASRec(torch.nn.Module):
         logits = item_embs.matmul(final_feat.unsqueeze(-1)).squeeze(-1)
 
         return logits # preds # (U, I)
-
-
-# for i in range(self.window_size):
-#     pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-#     pos_logits = (log_feats * pos_embs).sum(dim=-1)
-#     neg_logits = []
-#     for j in range(self.window_size):
-#         neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
-#         neg_logQ = torch.zeros(neg_seq[:, :, 0].shape)
-#         for batch_i in range(128):

@@ -1,6 +1,6 @@
 import os
 import time
-from sampled_softmax import SampledSoftmaxLoss
+from sampled_softmax import SampledSoftmaxLoss, SampledSoftmaxLossOver
 import torch
 import argparse
 from sam_optimizer.sam import SAM
@@ -227,7 +227,10 @@ if __name__ == '__main__':
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
-        criterion = SampledSoftmaxLoss()
+        if args.model_training == 'all_action' or args.model_training == 'future_rolling':
+            criterion = SampledSoftmaxLossOver()
+        else:
+            criterion = SampledSoftmaxLoss()
     elif args.loss_type == 'cross_entropy':
         criterion = torch.nn.CrossEntropyLoss()
     else:
@@ -249,8 +252,11 @@ if __name__ == '__main__':
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
-            pos_logits, neg_logits = model(u, seq, pos, neg)
-            if args.loss_type != 'ce_over':
+            if (args.model_training == 'future_rolling' or args.model_training == 'all_action') and args.loss_type == 'sampled_softmax':
+                pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
+            else:
+                pos_logits, neg_logits = model(u, seq, pos, neg)
+            if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
                 sam_optimizer.zero_grad()
@@ -282,7 +288,10 @@ if __name__ == '__main__':
             else:
                 adam_optimizer.zero_grad()
                 if args.loss_type == 'sampled_softmax':
-                    loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
+                    if args.model_training == 'all_action' or args.model_training == 'future_rolling':
+                        loss = criterion(pos_logits, neg_logits, neg_logQ)
+                    else:
+                        loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
                 elif args.loss_type == 'ce_over':
                     loss = 0
                     for i in range(args.window_size):
@@ -292,7 +301,7 @@ if __name__ == '__main__':
                             logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
                             labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
                             for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[0][indices]), dim=0)
+                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
                                 labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         else:
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
