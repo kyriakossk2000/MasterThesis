@@ -292,7 +292,7 @@ if __name__ == '__main__':
                             logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
                             labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
                             for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                                logits = torch.cat((logits, neg_logits[0][indices]), dim=0)
                                 labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         else:
                             pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
