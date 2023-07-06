@@ -129,7 +129,7 @@ class SASRec(torch.nn.Module):
                 for j in range(neg_seqs.shape[2]):
                     neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
                     neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
-                    for k in range(128):
+                    for k in range(neg_seqs.shape[0]):
                         unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
                         probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
                         neg_logQ[k] = torch.log(probs).sum(dim=0)
@@ -146,27 +146,26 @@ class SASRec(torch.nn.Module):
             
 
         elif self.model_training == 'dense_all_action' or self.model_training == 'super_dense_all_action':
-            # Convert positive and negative sequences to tensors and move them to the desired device
+
             pos_seqs_as_tensor = torch.LongTensor(pos_seqs).to(self.dev)
             neg_seqs_as_tensor = torch.LongTensor(neg_seqs).to(self.dev)
 
-            # Get embeddings of the positive and negative samples
             pos_sample_embeddings = self.item_emb(pos_seqs_as_tensor)
             neg_sample_embeddings = self.item_emb(neg_seqs_as_tensor)
 
             if self.model_training == 'dense_all_action':
-                # Expand the log_feats tensor dimension for matrix multiplication with neg_sample_embeddings
+
                 log_feats_expanded = log_feats.unsqueeze(2)
-                # Calculate the positive logits
+
                 pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)                
-                # Calculate the negative logits
+
                 neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
             elif self.model_training == 'super_dense_all_action':
                 log_feats_expanded = log_feats.unsqueeze(2)
                 pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)
                 neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1) 
         elif self.model_training == 'future_rolling':
-            # Loop through each position in the prediction window
+
             pos_logits_list = []
             neg_logits_list = []
             neg_logQ_list = []
@@ -184,11 +183,13 @@ class SASRec(torch.nn.Module):
             elif self.loss_type == 'sampled_softmax':
                 for j in range(neg_seqs.shape[2]):
                     neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
-                    neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
-                    for k in range(128):
-                        unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
-                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
-                        neg_logQ[k] = torch.log(probs).sum(dim=0)
+                    neg_logQ = torch.zeros(neg_seqs.shape[0], neg_seqs.shape[1]).to(self.dev)
+
+                    for k in range(neg_seqs.shape[0]):
+                        _, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
+                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples 
+                        neg_logQ[k, :counts.size(0)] = torch.log(probs)
+
                     neg_logQ_list.append(neg_logQ)
                     neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
                 
