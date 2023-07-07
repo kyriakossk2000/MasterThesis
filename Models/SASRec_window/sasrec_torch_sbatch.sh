@@ -57,8 +57,8 @@ source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 
 
 # FOR TRAINING with CE_over loss
-#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=ce_over --window_eval=true --window_size=7 # future rolling with ce-over
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=all_action --loss_type=ce_over --window_eval=true --window_size=7    
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=ce_over --window_eval=true --window_size=7  # future rolling with ce-over
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=all_action --loss_type=ce_over --window_eval=true --window_size=7    
 
 # FOR INFERENCE ONLY (NO TRAINING)
 # python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --data_partition=None --model_training=None --window_eval=true --inference_only=true # BASELINE
