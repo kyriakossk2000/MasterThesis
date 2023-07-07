@@ -36,6 +36,8 @@ parser.add_argument('--model_training', default=None, type=str)             # No
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
 parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
 parser.add_argument('--training_strategy', default='default', type=str)     # training strategy
+parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
+parser.add_argument('--mask_prob', default=0.15, type=float)                # mask probability
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -244,6 +246,8 @@ if __name__ == '__main__':
         adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
     
     T = 0.0
+    if args.masking:
+        mask_prob = args.mask_prob
     t0 = time.time()
     start_time = time.time()
     torch.autograd.set_detect_anomaly(True)
@@ -252,10 +256,17 @@ if __name__ == '__main__':
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
+            if args.masking:
+                mask = np.random.choice([0, 1], size=(seq.shape[0], seq.shape[1]), p=[1-mask_prob, mask_prob])
+                masked_seq = np.where(mask==1, 0, seq)
+            
             if (args.model_training == 'future_rolling' or args.model_training == 'all_action') and args.loss_type == 'sampled_softmax':
                 pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
-                pos_logits, neg_logits = model(u, seq, pos, neg)
+                if args.masking:
+                    pos_logits, neg_logits = model(u, masked_seq, pos, neg)
+                else:
+                    pos_logits, neg_logits = model(u, seq, pos, neg)
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
@@ -313,6 +324,12 @@ if __name__ == '__main__':
                                 labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         loss += criterion(logits, labels)
                     loss = loss.mean()  # avg over window size 
+                    if args.masking:
+                        mask_indices = np.where(mask != 0)
+                        mask_logits, _ = model(u, masked_seq, seq, neg)
+                        mask_labels = torch.LongTensor(seq[mask_indices])
+                        mask_loss = criterion(mask_logits[mask_indices], mask_labels.float().to(args.device))
+                        loss += mask_loss
                 else:
                     if args.model_training == 'all_action':
                         loss = criterion(pos_logits, pos_labels)

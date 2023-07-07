@@ -106,15 +106,22 @@ class SASRec(torch.nn.Module):
                 pos_logits_list = []
                 neg_logits_list = []
 
-                for i in range(self.window_size):
-                    pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
-                    neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
-                    
+                if pos_seqs.ndim == 3:  # Handle the case where pos_seqs is 3D
+                    for i in range(self.window_size):
+                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
+                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
+
+                        pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                        neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
+
+                        pos_logits_list.append(pos_logits)
+                        neg_logits_list.append(neg_logits)
+                elif pos_seqs.ndim == 2:
+                    pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
+
                     pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
-                    neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
-                    
-                    pos_logits_list.append(pos_logits)
-                    neg_logits_list.append(neg_logits)
+
+                    return pos_logits, None
 
                 return pos_logits_list, neg_logits_list
             
@@ -207,21 +214,6 @@ class SASRec(torch.nn.Module):
             neg_embs = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
             pos_logits = (log_feats * pos_embs).sum(dim=-1)
             neg_logits = (log_feats * neg_embs).sum(dim=-1)
-            # pos_logits = []
-            # neg_logits = []
-
-            # # Loop over sequence length
-            # for t in range(log_feats.shape[1]): # <-- Modification here
-            #     pos_logits_t = (log_feats[:, t, :] * pos_embs[:, t, :]).sum(dim=-1) # <-- Modification here
-            #     neg_logits_t = (log_feats[:, t, :] * neg_embs[:, t, :]).sum(dim=-1) # <-- Modification here
-                
-            #     pos_logits.append(pos_logits_t)
-            #     neg_logits.append(neg_logits_t)
-
-            # pos_logits = torch.stack(pos_logits, dim=1)
-            # neg_logits = torch.stack(neg_logits, dim=1)
-            # kame comment ta poupano os jame pou en ta list creation je uncomment to poukato 
-            
 
         return pos_logits, neg_logits # pos_pred, neg_pred
 
