@@ -263,10 +263,7 @@ if __name__ == '__main__':
             if (args.model_training == 'future_rolling' or args.model_training == 'all_action') and args.loss_type == 'sampled_softmax':
                 pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
-                if args.masking:
-                    pos_logits, neg_logits = model(u, masked_seq, pos, neg)
-                else:
-                    pos_logits, neg_logits = model(u, seq, pos, neg)
+                pos_logits, neg_logits = model(u, seq, pos, neg)
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
@@ -325,10 +322,10 @@ if __name__ == '__main__':
                         loss += criterion(logits, labels)
                     loss = loss.mean()  # avg over window size 
                     if args.masking:
-                        mask_indices = np.where(mask != 0)
+                        mask_indices = np.where(mask == 1)
                         mask_logits, _ = model(u, masked_seq, seq, neg)
-                        mask_labels = torch.LongTensor(seq[mask_indices])
-                        mask_loss = criterion(mask_logits[mask_indices], mask_labels.float().to(args.device))
+                        pos_labels = torch.ones(mask_logits.shape, device=args.device)
+                        mask_loss = criterion(mask_logits[mask_indices], pos_labels[mask_indices])
                         loss += mask_loss
                 else:
                     if args.model_training == 'all_action':
