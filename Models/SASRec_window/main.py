@@ -335,9 +335,17 @@ if __name__ == '__main__':
                         loss = criterion(pos_logits, pos_labels)
                         loss += criterion(neg_logits, neg_labels)
                     else:
-                        indices = np.where(pos != 0) 
+                        indices = np.where(pos != 0)
                         loss = criterion(pos_logits[indices], pos_labels[indices]) 
                         loss += criterion(neg_logits[indices], neg_labels[indices])
+                        if args.masking:
+                            mask_indices = np.where(mask == 1)
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
+                            mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
+                            mask_loss = criterion(mask_pos_logits[mask_indices], mask_pos_labels[mask_indices])
+                            mask_loss += criterion(mask_neg_logits[mask_indices], mask_neg_labels[mask_indices])
+                            loss += mask_loss
 
                 for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
                 loss.backward()
