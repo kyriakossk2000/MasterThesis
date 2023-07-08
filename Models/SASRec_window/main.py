@@ -323,9 +323,12 @@ if __name__ == '__main__':
                     loss = loss.mean()  # avg over window size 
                     if args.masking:
                         mask_indices = np.where(mask == 1)
-                        mask_logits, _ = model(u, masked_seq, seq, neg)
-                        pos_labels = torch.ones(mask_logits.shape, device=args.device)
-                        mask_loss = criterion(mask_logits[mask_indices], pos_labels[mask_indices])
+                        mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
+                        mask_logits = torch.cat((mask_pos_logits[mask_indices], mask_neg_logits[mask_indices]), dim=0)
+                        mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
+                        mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
+                        mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
+                        mask_loss = criterion(mask_logits, mask_labels)
                         loss += mask_loss
                 else:
                     if args.model_training == 'all_action':
