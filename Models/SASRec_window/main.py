@@ -300,6 +300,10 @@ if __name__ == '__main__':
                         loss = criterion(pos_logits, neg_logits, neg_logQ)
                     else:
                         loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
+                        if args.masking:
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            mask_loss = criterion(mask_pos_logits, mask_neg_logits)
+                            loss += mask_loss
                 elif args.loss_type == 'ce_over':
                     loss = 0
                     for i in range(args.window_size):
