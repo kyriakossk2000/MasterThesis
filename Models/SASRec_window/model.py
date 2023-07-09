@@ -72,7 +72,11 @@ class SASRec(torch.nn.Module):
         seqs += self.pos_emb(torch.LongTensor(positions).to(self.dev))
         seqs = self.emb_dropout(seqs)
 
-        timeline_mask = torch.BoolTensor(log_seqs == 0).to(self.dev)
+        if not torch.is_tensor(log_seqs):
+            timeline_mask = torch.BoolTensor(log_seqs == 0).to(self.dev)
+        else:
+            timeline_mask = log_seqs == 0
+            
         seqs *= ~timeline_mask.unsqueeze(-1) # broadcast in last dim
 
         tl = seqs.shape[1] # time dim len for enforce causality
