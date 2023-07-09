@@ -35,7 +35,7 @@ parser.add_argument('--data_partition', default=None, type=str)             # ty
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
 parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
 parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
-parser.add_argument('--training_strategy', default='default', type=str)     # training strategy
+parser.add_argument('--strategy', default='default', type=str)              # training strategy
 parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
 parser.add_argument('--mask_prob', default=0.15, type=float)                # mask probability
 
@@ -49,6 +49,7 @@ f.close()
 if __name__ == '__main__':
     print("Model training: ", args.model_training)
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling':
+        print("Training strategy: ", args.strategy)
         pass
     else:
         print("Data partition: ", args.data_partition)
@@ -307,22 +308,13 @@ if __name__ == '__main__':
                 elif args.loss_type == 'ce_over':
                     loss = 0
                     for i in range(args.window_size):
-                        if args.model_training == 'all_action':
-                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                            indices = np.where(pos[:,:,i] != 0)
-                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
-                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
-                            for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                        else:
-                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                            indices = np.where(pos[:,:,i] != 0)
-                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
-                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
-                            for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                        pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                        indices = np.where(pos[:,:,i] != 0)
+                        logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                        labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                        for j in range(1,len(neg_logits)):
+                            logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                            labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         loss += criterion(logits, labels)
                     loss = loss.mean()  # avg over window size 
                     if args.masking:

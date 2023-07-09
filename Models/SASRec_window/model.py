@@ -30,7 +30,7 @@ class SASRec(torch.nn.Module):
         self.item_num = item_num
         self.dev = args.device
         self.model_training = args.model_training
-        self.training_strategy=args.training_strategy
+        self.strategy=args.strategy
         self.window_size=args.window_size
         self.loss_type=args.loss_type
 
@@ -101,29 +101,54 @@ class SASRec(torch.nn.Module):
             final_embedding = log_feats[:, -1, :]  # get last embedding element
             final_embedding_expanded = final_embedding.unsqueeze(1)
             
-            # if using cross_entropy loss
             if self.loss_type == 'ce_over':
                 pos_logits_list = []
                 neg_logits_list = []
 
-                if pos_seqs.ndim == 3:  # Handle the case where pos_seqs is 3D
-                    for i in range(self.window_size):
-                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
-                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
+                if self.strategy in ['autoregressive', 'teacher_forcing']:
+                    seqs = torch.tensor(log_seqs).to(self.dev).long()  # o a PyTorch tensor
 
+                    for i in range(self.window_size):
+
+                        log_feats = self.log2feats(seqs)
+                        
+                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
                         pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
                         neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
 
                         pos_logits_list.append(pos_logits)
                         neg_logits_list.append(neg_logits)
-                elif pos_seqs.ndim == 2:
-                    pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
-                    neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
-                    pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
-                    neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
-                    return pos_logits, neg_logits
+                        
+                        if self.strategy == 'autoregressive':
+                            predicted_action = pos_logits.argmax(dim=-1)   # predictions
+                            predicted_action = predicted_action.unsqueeze(1)
+                        elif self.strategy == 'teacher_forcing':
+                            predicted_action = torch.tensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
+                            predicted_action = predicted_action[:,-1].unsqueeze(1)
+                        seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
+                        seqs = torch.cat([seqs, predicted_action], dim=1)
 
-                return pos_logits_list, neg_logits_list
+                    return pos_logits_list, neg_logits_list
+                else:
+                    if pos_seqs.ndim == 3:  # Handle the case where pos_seqs is 3D
+                        for i in range(self.window_size):
+                            pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
+                            neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
+
+                            pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                            neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
+
+                            pos_logits_list.append(pos_logits)
+                            neg_logits_list.append(neg_logits)
+                    elif pos_seqs.ndim == 2:
+                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
+                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
+                        pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                        neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
+                        return pos_logits, neg_logits
+
+                    return pos_logits_list, neg_logits_list
             
             elif self.loss_type == 'sampled_softmax':
                 pos_logits_list = []
@@ -177,37 +202,64 @@ class SASRec(torch.nn.Module):
             neg_logits_list = []
             neg_logQ_list = []
 
-            for i in range(self.window_size):
-                pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-                pos_logits_list.append((log_feats * pos_embs).sum(dim=-1))
+            if self.strategy in ['autoregressive', 'teacher_forcing']:
+                if self.loss_type == 'ce_over':
+                    seqs = torch.tensor(log_seqs).to(self.dev).long()  # o a PyTorch tensor
 
-            if self.loss_type == 'ce_over':
-                for j in range(neg_seqs.shape[2]):    
-                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
-                    neg_logits = (log_feats * neg_embs).sum(dim=-1)
-                    neg_logits_list.append(neg_logits)
-                return pos_logits_list, neg_logits_list 
-            elif self.loss_type == 'sampled_softmax':
-                for j in range(neg_seqs.shape[2]):
-                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
-                    neg_logQ = torch.zeros(neg_seqs.shape[0], neg_seqs.shape[1]).to(self.dev)
+                    for i in range(self.window_size):
 
-                    for k in range(neg_seqs.shape[0]):
-                        _, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
-                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples 
-                        neg_logQ[k, :counts.size(0)] = torch.log(probs)
+                        log_feats = self.log2feats(seqs)
+                        
+                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                        pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                        neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
 
-                    neg_logQ_list.append(neg_logQ)
-                    neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
-                
-                return pos_logits_list, neg_logits_list, neg_logQ_list
+                        pos_logits_list.append(pos_logits)
+                        neg_logits_list.append(neg_logits)
+                        
+                        if self.strategy == 'autoregressive':
+                            predicted_action = pos_logits.argmax(dim=-1)   # predictions
+                            predicted_action = predicted_action.unsqueeze(1)
+                        elif self.strategy == 'teacher_forcing':
+                            predicted_action = torch.tensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
+                            predicted_action = predicted_action[:,-1].unsqueeze(1)
+                        seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
+                        seqs = torch.cat([seqs, predicted_action], dim=1)
+
+                    return pos_logits_list, neg_logits_list
             else:
-                for j in range(neg_seqs.shape[2]):
-                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
-                    neg_logits = (log_feats * neg_embs).sum(dim=-1)
-                    neg_logits_list.append(neg_logits)
-                pos_logits = torch.stack(pos_logits_list, dim=-1)
-                neg_logits = torch.stack(neg_logits_list, dim=-1)
+                for i in range(self.window_size):
+                    pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                    pos_logits_list.append((log_feats * pos_embs).sum(dim=-1))
+
+                if self.loss_type == 'ce_over':
+                    for j in range(neg_seqs.shape[2]):    
+                        neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
+                        neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                        neg_logits_list.append(neg_logits)
+                    return pos_logits_list, neg_logits_list 
+                elif self.loss_type == 'sampled_softmax':
+                    for j in range(neg_seqs.shape[2]):
+                        neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
+                        neg_logQ = torch.zeros(neg_seqs.shape[0], neg_seqs.shape[1]).to(self.dev)
+
+                        for k in range(neg_seqs.shape[0]):
+                            _, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
+                            probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples 
+                            neg_logQ[k, :counts.size(0)] = torch.log(probs)
+
+                        neg_logQ_list.append(neg_logQ)
+                        neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
+                    
+                    return pos_logits_list, neg_logits_list, neg_logQ_list
+                else:
+                    for j in range(neg_seqs.shape[2]):
+                        neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                        neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                        neg_logits_list.append(neg_logits)
+                    pos_logits = torch.stack(pos_logits_list, dim=-1)
+                    neg_logits = torch.stack(neg_logits_list, dim=-1)
                                    
         else:
             pos_embs = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
