@@ -106,7 +106,7 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.LongTensor(log_seqs)  # to a PyTorch tensor
+                    seqs = torch.from_numpy(log_seqs).long().to(self.dev)  # o a PyTorch tensor
 
                     for i in range(self.window_size):
 
