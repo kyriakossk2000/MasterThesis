@@ -63,7 +63,10 @@ class SASRec(torch.nn.Module):
 
 
     def log2feats(self, log_seqs):
-        seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.dev))
+        if not torch.is_tensor(log_seqs):
+            seqs = self.item_emb(torch.LongTensor(log_seqs).to(self.dev))
+        else:
+            seqs = self.item_emb(log_seqs)
         seqs *= self.item_emb.embedding_dim ** 0.5
         positions = np.tile(np.array(range(log_seqs.shape[1])), [log_seqs.shape[0], 1])
         seqs += self.pos_emb(torch.LongTensor(positions).to(self.dev))
@@ -106,7 +109,7 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.from_numpy(log_seqs).long().to(self.dev)  # o a PyTorch tensor
+                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # o a PyTorch tensor
 
                     for i in range(self.window_size):
 
@@ -222,7 +225,7 @@ class SASRec(torch.nn.Module):
                             predicted_action = pos_logits.argmax(dim=-1)   # predictions
                             predicted_action = predicted_action.unsqueeze(1)
                         elif self.strategy == 'teacher_forcing':
-                            predicted_action = torch.tensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
+                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
                             predicted_action = predicted_action[:,-1].unsqueeze(1)
                         seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
                         seqs = torch.cat([seqs, predicted_action], dim=1)
