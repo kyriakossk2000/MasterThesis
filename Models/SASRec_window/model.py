@@ -124,7 +124,7 @@ class SASRec(torch.nn.Module):
                             predicted_action = pos_logits.argmax(dim=-1)   # predictions
                             predicted_action = predicted_action.unsqueeze(1)
                         elif self.strategy == 'teacher_forcing':
-                            predicted_action = torch.tensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
+                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)  # actual positives
                             predicted_action = predicted_action[:,-1].unsqueeze(1)
                         seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
                         seqs = torch.cat([seqs, predicted_action], dim=1)
