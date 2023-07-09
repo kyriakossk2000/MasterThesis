@@ -106,7 +106,7 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.tensor(log_seqs).to(self.dev).long()  # o a PyTorch tensor
+                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # o a PyTorch tensor
 
                     for i in range(self.window_size):
 
@@ -204,7 +204,7 @@ class SASRec(torch.nn.Module):
 
             if self.strategy in ['autoregressive', 'teacher_forcing']:
                 if self.loss_type == 'ce_over':
-                    seqs = torch.tensor(log_seqs).to(self.dev).long()  # o a PyTorch tensor
+                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # o a PyTorch tensor
 
                     for i in range(self.window_size):
 
