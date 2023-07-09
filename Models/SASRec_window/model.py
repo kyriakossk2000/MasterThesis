@@ -106,7 +106,7 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # o a PyTorch tensor
+                    seqs = torch.LongTensor(log_seqs)  # to a PyTorch tensor
 
                     for i in range(self.window_size):
 
@@ -122,10 +122,10 @@ class SASRec(torch.nn.Module):
                         
                         if self.strategy == 'autoregressive':
                             predicted_action = pos_logits.argmax(dim=-1)   # predictions
-                            predicted_action = predicted_action.unsqueeze(1).to(self.dev)
+                            predicted_action = predicted_action.unsqueeze(1)
                         elif self.strategy == 'teacher_forcing':
                             predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)  # actual positives
-                            predicted_action = predicted_action[:,-1].unsqueeze(1).to(self.dev)
+                            predicted_action = predicted_action[:,-1].unsqueeze(1)
                         seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
                         seqs = torch.cat([seqs, predicted_action], dim=1)
 
