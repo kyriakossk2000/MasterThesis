@@ -106,25 +106,25 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.tensor(log_seqs, device=self.dev, dtype=torch.long)  # o a PyTorch tensor
+                    seqs = torch.tensor(log_seqs, device=self.dev, dtype=torch.long)  # Create a PyTorch tensor on the specified device
 
                     for i in range(self.window_size):
 
                         log_feats = self.log2feats(seqs)
-                        
-                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+
+                        pos_samples_embeddings = self.item_emb(torch.tensor(pos_seqs[:, :, i], device=self.dev, dtype=torch.long))
+                        neg_samples_embeddings = self.item_emb(torch.tensor(neg_seqs[:, :, i], device=self.dev, dtype=torch.long))
                         pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
                         neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
 
                         pos_logits_list.append(pos_logits)
                         neg_logits_list.append(neg_logits)
-                        
+
                         if self.strategy == 'autoregressive':
                             predicted_action = pos_logits.argmax(dim=-1)   # predictions
                             predicted_action = predicted_action.unsqueeze(1)
                         elif self.strategy == 'teacher_forcing':
-                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)  # actual positives
+                            predicted_action = torch.tensor(pos_seqs[:, :, i], device=self.dev, dtype=torch.long)  # actual positives
                             predicted_action = predicted_action[:,-1].unsqueeze(1)
                         seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
                         seqs = torch.cat([seqs, predicted_action], dim=1)
