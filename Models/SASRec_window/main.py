@@ -307,41 +307,43 @@ if __name__ == '__main__':
                             loss += mask_loss
                 elif args.loss_type == 'ce_over':
                     loss = 0
-                    pos_size = len(pos_logits)
-                    neg_size = len(neg_logits)
-                    max_size = max(pos_size, neg_size)
-                    for i in range(max_size):
-                        if i < pos_size:
-                            pos_labels = torch.ones(pos_logits[i].shape, device=args.device)
-                            indices = np.where(pos[:,:,i] != 0)
-                            pos_logits_i = pos_logits[i][indices]
-                            pos_labels_i = pos_labels[indices]
-                        
-                        if i < neg_size:
-                            neg_labels = torch.zeros(neg_logits[i].shape, device=args.device)
-                            neg_logits_i = neg_logits[i][indices]
-                            neg_labels_i = neg_labels[indices]
-
-                        logits = torch.cat((pos_logits_i, neg_logits_i), dim=0)
-                        labels = torch.cat((pos_labels_i, neg_labels_i), dim=0)
-
-                        for j in range(1, neg_size):
-                            if j != i:
-                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                            
+                    for i in range(args.window_size):
+                        pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                        indices = np.where(pos[:,:,i] != 0)
+                        logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                        labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                        for j in range(1,len(neg_logits)):
+                            logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                            labels = torch.cat((labels, neg_labels[indices]), dim=0)
                         loss += criterion(logits, labels)
-
                     loss = loss.mean()  # avg over window size 
-                    # pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                    #     indices = np.where(pos[:,:,i] != 0)
-                    #     logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
-                    #     labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
-                    #     for j in range(1,len(neg_logits)):
-                    #         logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                    #         labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                    # pos_size = len(pos_logits)
+                    # neg_size = len(neg_logits)
+                    # max_size = max(pos_size, neg_size)
+                    # for i in range(max_size):
+                    #     if i < pos_size:
+                    #         pos_labels = torch.ones(pos_logits[i].shape, device=args.device)
+                    #         indices = np.where(pos[:,:,i] != 0)
+                    #         pos_logits_i = pos_logits[i][indices]
+                    #         pos_labels_i = pos_labels[indices]
+                        
+                    #     if i < neg_size:
+                    #         neg_labels = torch.zeros(neg_logits[i].shape, device=args.device)
+                    #         neg_logits_i = neg_logits[i][indices]
+                    #         neg_labels_i = neg_labels[indices]
+
+                    #     logits = torch.cat((pos_logits_i, neg_logits_i), dim=0)
+                    #     labels = torch.cat((pos_labels_i, neg_labels_i), dim=0)
+
+                    #     for j in range(1, neg_size):
+                    #         if j != i:
+                    #             logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                    #             labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                            
                     #     loss += criterion(logits, labels)
+
                     # loss = loss.mean()  # avg over window size 
+                    
                     if args.masking:
                         mask_indices = np.where(mask == 1)
                         mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
