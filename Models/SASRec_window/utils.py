@@ -82,8 +82,7 @@ class WarpSampler(object):
 
 def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, loss_type):
     def sample():
-        neg_samples = window_size
-        #neg_samples = 16
+        neg_samples = 2
         user = np.random.randint(1, usernum + 1)
         while len(user_train_seq[user]) <= 1:
             user = np.random.randint(1, usernum + 1)
@@ -95,7 +94,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
         ts = set(user_train_seq[user] + train_target_sampled)
         if model_training == 'all_action':
             pos_samples = window_size
-            #pos_samples = 16
+
             pos = np.zeros([maxlen, pos_samples], dtype=np.int32)
             neg = np.zeros([maxlen, neg_samples], dtype=np.int32)
             for i in reversed(user_train_seq[user]):
@@ -106,6 +105,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                         neg[idx,j] = random_neq(1, itemnum + 1, ts)
                 idx -= 1
                 if idx == -1: break
+
         elif model_training == 'dense_all_action':
             pos_samples = 1
             pos = np.zeros([maxlen, pos_samples], dtype=np.int32)

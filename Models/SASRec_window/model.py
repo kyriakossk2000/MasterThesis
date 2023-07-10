@@ -103,7 +103,9 @@ class SASRec(torch.nn.Module):
 
     def forward(self, user_ids, log_seqs, pos_seqs, neg_seqs): # for training        
         log_feats = self.log2feats(log_seqs) # user_ids hasn't been used yet
-        
+        pos_size = pos_seqs.shape[2]
+        neg_size = neg_seqs.shape[2]
+        max_window_size = max(pos_size, neg_size)
         if self.model_training == 'all_action':
             final_embedding = log_feats[:, -1, :]  # get last embedding element
             final_embedding_expanded = final_embedding.unsqueeze(1)
@@ -113,32 +115,33 @@ class SASRec(torch.nn.Module):
                 neg_logits_list = []
 
                 if self.strategy in ['autoregressive', 'teacher_forcing']:
-                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # o a PyTorch tensor
+                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # to a PyTorch tensor
 
-                    for i in range(self.window_size):
+                    for i in range(max_window_size):
 
                         log_feats = self.log2feats(seqs)
                         
-                        pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-                        neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
-                        pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
-                        neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
+                        if i < pos_size:
+                            pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                            pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
+                            pos_logits_list.append(pos_logits)
 
-                        pos_logits_list.append(pos_logits)
-                        neg_logits_list.append(neg_logits)
+                            if self.strategy == 'autoregressive':
+                                predicted_action = pos_logits.argmax(dim=-1).unsqueeze(1)
+                            elif self.strategy == 'teacher_forcing':
+                                predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)[:,-1].unsqueeze(1)
+
+                            seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
+                            seqs = torch.cat([seqs, predicted_action], dim=1)
                         
-                        if self.strategy == 'autoregressive':
-                            predicted_action = pos_logits.argmax(dim=-1)   # predictions
-                            predicted_action = predicted_action.unsqueeze(1)
-                        elif self.strategy == 'teacher_forcing':
-                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)  # actual positives
-                            predicted_action = predicted_action[:,-1].unsqueeze(1)
-                        seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
-                        seqs = torch.cat([seqs, predicted_action], dim=1)
+                        if i < neg_size:
+                            neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                            neg_logits = (log_feats * neg_samples_embeddings).sum(dim=-1)
+                            neg_logits_list.append(neg_logits)
 
                     return pos_logits_list, neg_logits_list
                 else:
-                    if pos_seqs.ndim == 3:  # Handle the case where pos_seqs is 3D
+                    if pos_seqs.ndim == 3:  # handle the case where pos_seqs is 3D 
                         for i in range(self.window_size):
                             pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs[:,:,i]).to(self.dev))
                             neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs[:,:,i]).to(self.dev))
@@ -148,7 +151,7 @@ class SASRec(torch.nn.Module):
 
                             pos_logits_list.append(pos_logits)
                             neg_logits_list.append(neg_logits)
-                    elif pos_seqs.ndim == 2:
+                    elif pos_seqs.ndim == 2:  # handle the case where pos_seqs is 2D - masking case
                         pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))
                         neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))
                         pos_logits = (log_feats * pos_samples_embeddings).sum(dim=-1)
@@ -161,21 +164,54 @@ class SASRec(torch.nn.Module):
                 pos_logits_list = []
                 neg_logits_list = []
                 neg_logQ_list = []
+                if self.strategy in ['autoregressive', 'teacher_forcing']:
+                    seqs = torch.LongTensor(log_seqs).to(self.dev)  # to a PyTorch tensor
+                    
+                    for i in range(max_window_size):
+                        log_feats = self.log2feats(seqs)
 
-                for i in range(self.window_size):
-                    pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
-                    pos_logits_list.append((log_feats * pos_embs).sum(dim=-1))
-                for j in range(neg_seqs.shape[2]):
-                    neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
-                    neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
-                    for k in range(neg_seqs.shape[0]):
-                        unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
-                        probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
-                        neg_logQ[k] = torch.log(probs).sum(dim=0)
-                    neg_logQ_list.append(neg_logQ)
-                    neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
+                        if i < pos_size:
+                            pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                            pos_logits = (log_feats * pos_embs).sum(dim=-1)
+                            pos_logits_list.append(pos_logits)
 
-                return pos_logits_list, neg_logits_list, neg_logQ_list
+                            if self.strategy == 'autoregressive':
+                                predicted_action = pos_logits.argmax(dim=-1).unsqueeze(1)
+                            elif self.strategy == 'teacher_forcing':
+                                predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)[:,-1].unsqueeze(1)
+
+                            seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
+                            seqs = torch.cat([seqs, predicted_action], dim=1)
+
+                        if i < neg_size:
+                            neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, i]).to(self.dev))
+                            neg_logits = (log_feats * neg_embs).sum(dim=-1)
+                            neg_logits_list.append(neg_logits)
+
+                            neg_logQ = torch.zeros(neg_seqs[:, :, i].shape).to(self.dev)
+                            for k in range(neg_seqs.shape[0]):
+                                unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, i][k]), return_counts=True)  # times neg sample appears in batch
+                                probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples
+                                neg_logQ[k] = torch.log(probs).sum(dim=0)
+
+                            neg_logQ_list.append(neg_logQ)
+
+                    return pos_logits_list, neg_logits_list, neg_logQ_list
+                else:
+                    for i in range(self.window_size):
+                        pos_embs = self.item_emb(torch.LongTensor(pos_seqs[:, :, i]).to(self.dev))
+                        pos_logits_list.append((log_feats * pos_embs).sum(dim=-1))
+                    for j in range(neg_seqs.shape[2]):
+                        neg_embs = self.item_emb(torch.LongTensor(neg_seqs[:, :, j]).to(self.dev))
+                        neg_logQ = torch.zeros(neg_seqs[:, :, j].shape).to(self.dev)
+                        for k in range(neg_seqs.shape[0]):
+                            unique_negs, counts = torch.unique(torch.LongTensor(neg_seqs[:, :, j][k]), return_counts=True)  # times neg sample appers in batch
+                            probs = counts.float() / neg_seqs.shape[0]  # probs of neg samples            
+                            neg_logQ[k] = torch.log(probs).sum(dim=0)
+                        neg_logQ_list.append(neg_logQ)
+                        neg_logits_list.append((log_feats * neg_embs).sum(dim=-1))
+
+                    return pos_logits_list, neg_logits_list, neg_logQ_list
             else:
                 pos_samples_embeddings = self.item_emb(torch.LongTensor(pos_seqs).to(self.dev))[:,-1,:]
                 neg_samples_embeddings = self.item_emb(torch.LongTensor(neg_seqs).to(self.dev))[:,-1,:]
@@ -229,7 +265,7 @@ class SASRec(torch.nn.Module):
                             predicted_action = pos_logits.argmax(dim=-1)   # predictions
                             predicted_action = predicted_action.unsqueeze(1)
                         elif self.strategy == 'teacher_forcing':
-                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev).long()  # actual positives
+                            predicted_action = torch.LongTensor(pos_seqs[:, :, i]).to(self.dev)  # actual positives
                             predicted_action = predicted_action[:,-1].unsqueeze(1)
                         seqs = seqs[:, 1:]  # remove the first element to maintain the embedding size
                         seqs = torch.cat([seqs, predicted_action], dim=1)
