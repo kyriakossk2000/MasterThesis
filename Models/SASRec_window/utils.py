@@ -23,6 +23,11 @@ def random_neq_all(l, r, s, count):
     np.random.shuffle(possible_numbers)
     return possible_numbers[:count]
 
+def random_neq_all_uniform(l, r, s, count):
+    possible_numbers = list(set(range(l, r)) - set(s))
+    np.random.shuffle(possible_numbers)
+    return np.random.choice(possible_numbers, count, replace=True)
+
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
 
@@ -80,7 +85,7 @@ class WarpSampler(object):
             p.terminate()
             p.join()
 
-def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, loss_type):
+def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, args):
     def sample():
         neg_samples = window_size
         user = np.random.randint(1, usernum + 1)
@@ -101,8 +106,11 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
                 seq[idx] = i 
                 if idx == maxlen - 1:
                     pos[idx] = train_target_sampled
-                    for j in range(neg_samples):
-                        neg[idx,j] = random_neq(1, itemnum + 1, ts)
+                    if args.uniform_ss:
+                        neg[idx] = random_neq_all_uniform(1, itemnum + 1, ts, neg_samples)
+                    else:
+                        for j in range(neg_samples):
+                            neg[idx,j] = random_neq(1, itemnum + 1, ts)
                 idx -= 1
                 if idx == -1: break
 
@@ -140,7 +148,7 @@ def sample_function_all(user_train_seq, train_target_seq, usernum, itemnum, batc
 
 # All action and Dense all action sampler based on Pinnerformer 
 class WarpSamplerAll(object):
-    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, model_training='all_action', window_size=7, loss_type='bce'):
+    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, model_training='all_action', window_size=7, args=None):
         self.result_queue = Queue(maxsize=n_workers * 10)
         self.processors = []
         for i in range(n_workers):
@@ -155,7 +163,7 @@ class WarpSamplerAll(object):
                                                         np.random.randint(2e9),
                                                         model_training,
                                                         window_size,
-                                                        loss_type
+                                                        args
                                                         )))
             self.processors[-1].daemon = True
             self.processors[-1].start()
@@ -168,7 +176,7 @@ class WarpSamplerAll(object):
             p.terminate()
             p.join()
 
-def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, window_size=7, loss_type='bce'):
+def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, window_size=7, args=None):
     def sample():
         user = np.random.randint(1, usernum + 1)
         while len(user_input_seq[user]) <= 1:
@@ -184,8 +192,11 @@ def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, b
         for i, input_item in enumerate(reversed(user_input_seq[user])):
             seq[idx] = input_item
             pos[idx] = user_target_seq[user][i]
-            for j in range(neg_samples):
-                neg[idx,j] = random_neq(1, itemnum + 1, ts)
+            if args.uniform_ss:
+                neg[idx] = random_neq_all_uniform(1, itemnum + 1, ts, neg_samples)
+            else:
+                for j in range(neg_samples):
+                    neg[idx,j] = random_neq(1, itemnum + 1, ts)
             idx -= 1
             if idx == -1: break
         
@@ -201,7 +212,7 @@ def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, b
 
 
 class WarpSamplerRolling(object):
-    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, window_size=7, loss_type='bce'):
+    def __init__(self, user_input_seq, user_target_seq, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1, window_size=7, args=None):
         self.result_queue = Queue(maxsize=n_workers * 10)
         self.processors = []
         for i in range(n_workers):
@@ -215,7 +226,7 @@ class WarpSamplerRolling(object):
                                                       self.result_queue,
                                                       np.random.randint(2e9),
                                                       window_size,
-                                                      loss_type
+                                                      args
                                                       )))
             self.processors[-1].daemon = True
             self.processors[-1].start()

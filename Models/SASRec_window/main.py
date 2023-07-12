@@ -38,6 +38,7 @@ parser.add_argument('--loss_type', default='bce', type=str)                 # lo
 parser.add_argument('--strategy', default='default', type=str)              # training strategy
 parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
 parser.add_argument('--mask_prob', default=0.15, type=float)                # mask probability
+parser.add_argument('--uniform_ss', default=False, type=str2bool)           # use uniform neg sampled softmax loss? 
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -53,6 +54,8 @@ if __name__ == '__main__':
         pass
     else:
         print("Data partition: ", args.data_partition)
+    if args.masking:
+        print("Masking with perc: ", args.mask_prob)
     # load dataset
     if args.model_training == 'all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -69,7 +72,7 @@ if __name__ == '__main__':
             if count >= 3:  # Change this to print more or fewer sequences
                 break
         
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
     elif args.model_training == 'dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -85,7 +88,7 @@ if __name__ == '__main__':
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
     elif args.model_training == 'super_dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
         [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
@@ -100,8 +103,7 @@ if __name__ == '__main__':
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, loss_type=args.loss_type)
-    
+        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)    
     elif args.model_training == 'future_rolling':
         dataset = data_partition_window_rolling(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
         [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
@@ -116,7 +118,7 @@ if __name__ == '__main__':
             count += 1
             if count >= 3:  # Change this to print more or fewer sequences
                 break
-            sampler = WarpSamplerRolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, window_size=args.window_size, loss_type=args.loss_type)
+        sampler = WarpSamplerRolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, window_size=args.window_size, args=args)
         
     else:  # SASRec next item
         if args.data_partition == 'independent':
@@ -230,7 +232,7 @@ if __name__ == '__main__':
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
-        if args.model_training == 'all_action' or args.model_training == 'future_rolling':
+        if not args.uniform_ss:
             criterion = SampledSoftmaxLossOver()
         else:
             criterion = SampledSoftmaxLoss()
@@ -238,8 +240,13 @@ if __name__ == '__main__':
         criterion = torch.nn.CrossEntropyLoss()
     else:
         criterion = torch.nn.BCEWithLogitsLoss() 
-    print('Loss type: ', args.loss_type)
-    
+    if args.loss_type == 'sampled_softmax' and args.uniform_ss:
+        print('Loss type: Uniform Sampled Softmax')
+    elif args.loss_type == 'sampled_softmax' and not args.uniform_ss:
+        print('Loss type: Sampled Softmax with LogQ')
+    else:
+        print('Loss type: ', args.loss_type)
+
     if args.optimizer == 'sam':
         base_optimizer = torch.optim.Adam
         sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)
@@ -261,7 +268,7 @@ if __name__ == '__main__':
                 mask = np.random.choice([0, 1], size=(seq.shape[0], seq.shape[1]), p=[1-mask_prob, mask_prob])
                 masked_seq = np.where(mask==1, 0, seq)
             
-            if (args.model_training == 'future_rolling' or args.model_training == 'all_action') and args.loss_type == 'sampled_softmax':
+            if not args.uniform_ss and args.loss_type == 'sampled_softmax':
                 pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
                 pos_logits, neg_logits = model(u, seq, pos, neg)
@@ -297,14 +304,17 @@ if __name__ == '__main__':
             else:
                 adam_optimizer.zero_grad()
                 if args.loss_type == 'sampled_softmax':
-                    if args.model_training == 'all_action' or args.model_training == 'future_rolling':
+                    if (args.model_training == 'all_action' or args.model_training == 'future_rolling') and not args.uniform_ss:
                         loss = criterion(pos_logits, neg_logits, neg_logQ)
                     else:
-                        loss = criterion(pos_logits, neg_logits) # compute the loss using SampledSoftmaxLoss
-                        if args.masking:
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
-                            mask_loss = criterion(mask_pos_logits, mask_neg_logits)
-                            loss += mask_loss
+                        loss = 0
+                        for i in range(args.window_size):
+                            loss += criterion(pos_logits[i], neg_logits[i])
+                        loss = loss.mean()  # avg over window size 
+                    if args.masking:
+                        mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                        mask_loss = criterion(mask_pos_logits, mask_neg_logits)
+                        loss += mask_loss
                 elif args.loss_type == 'ce_over':
                     loss = 0
                     for i in range(args.window_size):
