@@ -57,12 +57,14 @@ source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=super_dense_all_action --window_eval=true  # super dense all action 
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=teacher_forcing --loss_type=sampled_softmax --model_training=None --window_eval=true
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=sampled_softmax --window_eval=true --window_size=7 # future rolling with sampled softmax
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=sampled_softmax --window_eval=true --window_size=7 --uniform_ss=true
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=sampled_softmax --window_eval=true --window_size=7 --uniform_ss=true --strategy=teacher_forcing
 # Masking
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=None --loss_type=sampled_softmax --window_eval=true --window_size=7 --masking=true --mask_prob=0.15
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=independent --model_training=None --loss_type=sampled_softmax --window_eval=true --window_size=7 --masking=true --mask_prob=0.15
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=teacher_forcing --model_training=None --loss_type=sampled_softmax --window_eval=true --window_size=7 --masking=true --mask_prob=0.15
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=all_action --window_eval=true --strategy=autoregressive
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=all_action --window_eval=true --strategy=teacher_forcing
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=all_action --window_eval=true --strategy=teacher_forcing --uniform_ss=true
 
 # FOR TRAINING with CE_over loss
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=future_rolling --loss_type=ce_over --window_eval=true --window_size=7  # future rolling with ce-over
