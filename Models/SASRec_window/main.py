@@ -5,7 +5,7 @@ import torch
 import argparse
 from sam_optimizer.sam import SAM
 
-from model import SASRec
+from model import SASRec, SASRecT2V
 from utils import *
 
 def str2bool(s):
@@ -38,7 +38,8 @@ parser.add_argument('--loss_type', default='bce', type=str)                 # lo
 parser.add_argument('--strategy', default='default', type=str)              # training strategy
 parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
 parser.add_argument('--mask_prob', default=0.15, type=float)                # mask probability
-parser.add_argument('--uniform_ss', default=False, type=str2bool)           # use uniform neg sampled softmax loss? 
+parser.add_argument('--uniform_ss', default=False, type=str2bool)           # use uniform neg sampled softmax loss?
+parser.add_argument('--temporal', default=False, type=str2bool)             # use temporal info for training (time2vec)
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -58,21 +59,40 @@ if __name__ == '__main__':
         print("Masking with perc: ", args.mask_prob)
     # load dataset
     if args.model_training == 'all_action':
-        dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
-        [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
-        training_samples = user_input_seq
-        print("All action split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
-        count = 0
-        for key, seq in user_input_seq.items():
-            print(f"User: {key},Train Sequence: {seq}")
-            print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
-            print(f"Test for user {key}: ", user_test.get(key, []))
-            count += 1
-            if count >= 3:  # Change this to print more or fewer sequences
-                break
-        
-        sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
+        if args.temporal: 
+            dataset = data_partition_window_all_action_temporal(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+            [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum, 
+            user_timestamp_input, user_timestamp_target, user_timestamp_train, user_timestamp_valid, user_timestamp_test] = dataset
+            training_samples = user_input
+            print("All action split with Temporal:" + "\n" +"Number of training sequences in train set: " + str(len(user_input.values())) + " Num. of timesteps: " + str(len(user_timestamp_input.values())))
+            count = 0
+            for key, seq in user_input.items():
+                print(f"User: {key},Train Sequence: {seq}")
+                print(f"Target Sequence for user {key}: ", user_input.get(key, []))
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Test for user {key}: ", user_test.get(key, []))
+                print(f"Temporal target Sequence for user {key}: ", user_timestamp_target.get(key, []))
+                print(f"Valid for timesteps {key}: ", user_timestamp_valid.get(key, []))
+                count += 1
+                if count >= 3:  # Change this to print more or fewer sequences
+                    break
+            sampler = WarpSamplerAllTemporal(user_input, user_target, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args, user_timestamp_input=user_timestamp_input, user_timestamp_target=user_timestamp_target)            
+        else: 
+            dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+            [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+            training_samples = user_input_seq
+            print("All action split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+            count = 0
+            for key, seq in user_input_seq.items():
+                print(f"User: {key},Train Sequence: {seq}")
+                print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Test for user {key}: ", user_test.get(key, []))
+                count += 1
+                if count >= 3:  # Change this to print more or fewer sequences
+                    break
+            
+            sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
     elif args.model_training == 'dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -172,7 +192,10 @@ if __name__ == '__main__':
     print('average sequence length: %.2f' % (cc / len(training_samples)))
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
     
-    model = SASRec(usernum, itemnum, args).to(args.device) 
+    if args.temporal:
+        model = SASRecT2V(usernum, itemnum, args).to(args.device) 
+    else:
+        model = SASRec(usernum, itemnum, args).to(args.device) 
     
     for name, param in model.named_parameters():
         try:
@@ -202,7 +225,10 @@ if __name__ == '__main__':
         else:
             print('\n')
             print('Evaluating with window ' + str(args.window_eval_size))
-            t_test = evaluate_window(model, dataset, args, k_future_pos=args.window_eval_size) 
+            if args.temporal:
+                t_test = evaluate_window_time(model, dataset, args, k_future_pos=args.window_eval_size) 
+            else:
+                t_test = evaluate_window(model, dataset, args, k_future_pos=args.window_eval_size) 
             t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, t_test_kendall_avg = t_test
             #over_all_NDCG, over_all_HR, over_allKendall = evaluate_window_over_all(model, dataset, args, k_future_pos=args.window_eval_size)
 
@@ -262,16 +288,28 @@ if __name__ == '__main__':
     for epoch in range(epoch_start_idx, args.num_epochs + 1):
         if args.inference_only: break # just to decrease identition
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
-            u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
-            u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
+            if args.temporal:
+                u, seq, pos, neg, time_seq, pos_time = sampler.next_batch() # tuples to ndarray
+                u, seq, pos, neg, time_seq, pos_time = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(time_seq), np.array(pos_time) 
+            else:
+                u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
+                u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             if args.masking:
                 mask = np.random.choice([0, 1], size=(seq.shape[0], seq.shape[1]), p=[1-mask_prob, mask_prob])
                 masked_seq = np.where(mask==1, 0, seq)
-            
+                if args.temporal:
+                    masked_time_seq = np.where(mask==1, 0, time_seq)
+
             if not args.uniform_ss and args.loss_type == 'sampled_softmax':
-                pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
+                if args.temporal:
+                    pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg, time_seq, pos_time)
+                else:
+                    pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
-                pos_logits, neg_logits = model(u, seq, pos, neg)
+                if args.temporal:
+                    pos_logits, neg_logits = model(u, seq, pos, neg, time_seq, pos_time)
+                else:
+                    pos_logits, neg_logits = model(u, seq, pos, neg)
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
@@ -312,7 +350,10 @@ if __name__ == '__main__':
                             loss += criterion(pos_logits[i], neg_logits[i])
                         loss = loss.mean()  # avg over window size 
                     if args.masking:
-                        mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                        if args.temporal:
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)
+                        else:
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
                         mask_loss = criterion(mask_pos_logits, mask_neg_logits)
                         loss += mask_loss
                 elif args.loss_type == 'ce_over':
@@ -356,8 +397,12 @@ if __name__ == '__main__':
                     
                     if args.masking:
                         mask_indices = np.where(mask == 1)
-                        mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
+                        if args.temporal:
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0], masked_time_seq, time_seq)
+                        else:
+                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
                         mask_logits = torch.cat((mask_pos_logits[mask_indices], mask_neg_logits[mask_indices]), dim=0)
+
                         mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
                         mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
                         mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
@@ -398,8 +443,12 @@ if __name__ == '__main__':
             else:
                 print('\n')
                 print('Evaluating with window ' + str(args.window_eval_size))
-                t_test = evaluate_window(model, dataset, args, k_future_pos=args.window_eval_size)
-                t_valid = evaluate_valid_window(model, dataset, args, k_future_pos=args.window_eval_size)
+                if args.temporal:
+                    t_test = evaluate_window_time(model, dataset, args, k_future_pos=args.window_eval_size)
+                    t_valid = evaluate_window_valid_time(model, dataset, args, k_future_pos=args.window_eval_size)
+                else:
+                    t_test = evaluate_window(model, dataset, args, k_future_pos=args.window_eval_size)
+                    t_valid = evaluate_valid_window(model, dataset, args, k_future_pos=args.window_eval_size)
                 t_test_NDCG, t_test_HR, t_test_sequence_score, t_test_ht_ordered_score, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, t_test_kendall_avg = t_test
                 t_valid_NDCG, t_valid_HR, t_valid_sequence_score, t_valid_ht_ordered_score, valid_ndcg_avg, valid_ht_avg, valid_sequence_score_avg, valid_ht_ordered_score_avg, valid_kendall_avg = t_valid
                 #over_all_NDCG, over_all_HR, over_allKendall = evaluate_window_over_all(model, dataset, args, k_future_pos=args.window_eval_size)
