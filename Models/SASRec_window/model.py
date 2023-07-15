@@ -38,6 +38,16 @@ class CosineActivation(torch.nn.Module):
     def forward(self, tau):
         return t2v(tau, self.f, self.out_features, self.w, self.b, self.w0, self.b0)
     
+class MLP(torch.nn.Module):
+    def __init__(self, input_size, output_size):
+        super(MLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_size, input_size//2)
+        self.linear2 = torch.nn.Linear(input_size//2, output_size)
+
+    def forward(self, x):
+        x = torch.nn.functional.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
 
 class PointWiseFeedForward(torch.nn.Module):
     def __init__(self, hidden_units, dropout_rate):
@@ -428,7 +438,9 @@ class SASRecT2V(torch.nn.Module):
         # https://stackoverflow.com/questions/42704283/adding-l1-l2-regularization-in-pytorch
         self.item_emb = torch.nn.Embedding(self.item_num+1, args.hidden_units, padding_idx=0)
         self.pos_emb = torch.nn.Embedding(args.maxlen, args.hidden_units)
-        self.time_emb = SineActivation(1, args.hidden_units)
+        self.time_sin_emb = SineActivation(1, args.hidden_units)
+        self.time_cos_emb = CosineActivation(1, args.hidden_units)
+
         self.emb_dropout = torch.nn.Dropout(p=args.dropout_rate)
 
         self.attention_layernorms = torch.nn.ModuleList() # to be Q for self-attention
@@ -452,6 +464,7 @@ class SASRecT2V(torch.nn.Module):
 
             new_fwd_layer = PointWiseFeedForward(args.hidden_units, args.dropout_rate)
             self.forward_layers.append(new_fwd_layer)
+        self.mlp = MLP(args.hidden_units * 3, args.hidden_units)  # input size = 150 (50 + 100), output size = 50
 
 
     def log2feats(self, log_seqs, time_seqs):
@@ -464,10 +477,16 @@ class SASRecT2V(torch.nn.Module):
         seqs += self.pos_emb(torch.LongTensor(positions).to(self.dev))
         seqs = self.emb_dropout(seqs)
         if not torch.is_tensor(log_seqs):
-            time_embs = self.time_emb(torch.FloatTensor(time_seqs).unsqueeze(-1).to(self.dev))
+            time_sin_embs = self.time_sin_emb(torch.FloatTensor(time_seqs).unsqueeze(-1).to(self.dev))
+            time_cos_embs = self.time_cos_emb(torch.FloatTensor(time_seqs).unsqueeze(-1).to(self.dev))
         else:
-            time_embs = self.time_emb(time_seqs)
-        seqs += time_embs
+            time_sin_embs = self.time_sin_emb(time_seqs)
+            time_cos_embs = self.time_cos_emb(time_seqs)
+
+        time_embs = torch.cat([time_sin_embs, time_cos_embs], dim=-1)  # concatenate along the feature dimension
+        seqs = torch.cat([seqs, time_embs], dim=-1)
+        seqs = self.mlp(seqs)
+
         if not torch.is_tensor(log_seqs):
             timeline_mask = torch.BoolTensor(log_seqs == 0).to(self.dev)
         else:
