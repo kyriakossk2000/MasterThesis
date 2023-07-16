@@ -93,6 +93,22 @@ if __name__ == '__main__':
                     break
             
             sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
+    elif args.model_training == 'combined':
+        dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+        [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+        training_samples = user_train
+        print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+        count = 0
+        for key, seq in user_input_seq.items():
+            print(f"User: {key},Train Sequence: {seq}")
+            print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
+            print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Test for user {key}: ", user_test.get(key, []))
+            count += 1
+            if count >= 3:  # Change this to print more or fewer sequences
+                break
+        sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
     elif args.model_training == 'dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -292,8 +308,12 @@ if __name__ == '__main__':
                 u, seq, pos, neg, time_seq, pos_time = sampler.next_batch() # tuples to ndarray
                 u, seq, pos, neg, time_seq, pos_time = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(time_seq), np.array(pos_time) 
             else:
-                u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
-                u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
+                if args.model_training == 'combined':
+                    u, seq, pos, neg, seq_all, pos_all, neg_all = sampler.next_batch() # tuples to ndarray
+                    u, seq, pos, neg, seq_all, pos_all, neg_all = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(seq_all), np.array(pos_all), np.array(neg_all)
+                else:
+                    u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
+                    u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             if args.masking:
                 mask = np.random.choice([0, 1], size=(seq.shape[0], seq.shape[1]), p=[1-mask_prob, mask_prob])
                 masked_seq = np.where(mask==1, 0, seq)
@@ -304,12 +324,19 @@ if __name__ == '__main__':
                 if args.temporal:
                     pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg, time_seq, pos_time)
                 else:
-                    pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
+                    if args.model_training == 'combined':
+                        pos_logits, neg_logits = model(u, seq, pos, neg)
+                        pos_logits_all, neg_logits_all, neg_logQ_all = model(u, seq_all, pos_all, neg_all)
+                    else:
+                        pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
                 if args.temporal:
                     pos_logits, neg_logits = model(u, seq, pos, neg, time_seq, pos_time)
                 else:
                     pos_logits, neg_logits = model(u, seq, pos, neg)
+                    if args.model_training == 'combined':
+                        pos_logits_all, neg_logits_all = model(u, seq_all, pos_all, neg_all)
+
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
             if args.optimizer == 'sam':
@@ -341,96 +368,129 @@ if __name__ == '__main__':
                 print('SAMM')
             else:
                 adam_optimizer.zero_grad()
-                if args.loss_type == 'sampled_softmax':
-                    if (args.model_training == 'all_action' or args.model_training == 'future_rolling') and not args.uniform_ss:
-                        loss = criterion(pos_logits, neg_logits, neg_logQ)
-                    else:
-                        loss = 0
-                        for i in range(args.window_size):
-                            loss += criterion(pos_logits[i], neg_logits[i])
-                        loss = loss.mean()  # avg over window size 
-                    if args.masking:
-                        if args.temporal:
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)
+                if args.model_training == 'combined':
+                    if args.loss_type == 'sampled_softmax':
+                        if args.uniform_ss:
+                            loss = criterion(pos_logits, neg_logits)
+                            loss_all = 0
+                            for i in range(args.window_size):
+                                loss_all += criterion(pos_logits_all[i], neg_logits_all[i])
+                            loss_all = loss_all.mean()  # avg over window size
+                            loss = loss + loss_all
                         else:
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
-                        mask_loss = criterion(mask_pos_logits, mask_neg_logits)
-                        loss += mask_loss
-                elif args.loss_type == 'ce_over':
-                    loss = 0
-                    for i in range(args.window_size):
-                        pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                        indices = np.where(pos[:,:,i] != 0)
-                        logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
-                        labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
-                        for j in range(1,len(neg_logits)):
-                            logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                            labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                        loss += criterion(logits, labels)
-                    loss = loss.mean()  # avg over window size 
-                    # pos_size = len(pos_logits)
-                    # neg_size = len(neg_logits)
-                    # max_size = max(pos_size, neg_size)
-                    # for i in range(max_size):
-                    #     if i < pos_size:
-                    #         pos_labels = torch.ones(pos_logits[i].shape, device=args.device)
-                    #         indices = np.where(pos[:,:,i] != 0)
-                    #         pos_logits_i = pos_logits[i][indices]
-                    #         pos_labels_i = pos_labels[indices]
-                        
-                    #     if i < neg_size:
-                    #         neg_labels = torch.zeros(neg_logits[i].shape, device=args.device)
-                    #         neg_logits_i = neg_logits[i][indices]
-                    #         neg_labels_i = neg_labels[indices]
+                            criterion_sim = SampledSoftmaxLoss()
+                            loss = criterion_sim(pos_logits, neg_logits)
+                            loss_all = criterion(pos_logits_all, neg_logits_all, neg_logQ_all)
+                            loss = loss + loss_all
 
-                    #     logits = torch.cat((pos_logits_i, neg_logits_i), dim=0)
-                    #     labels = torch.cat((pos_labels_i, neg_labels_i), dim=0)
-
-                    #     for j in range(1, neg_size):
-                    #         if j != i:
-                    #             logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                    #             labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                            
-                    #     loss += criterion(logits, labels)
-
-                    # loss = loss.mean()  # avg over window size 
-                    
-                    if args.masking:
-                        mask_indices = np.where(mask == 1)
-                        if args.temporal:
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0], masked_time_seq, time_seq)
-                        else:
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
-                        mask_logits = torch.cat((mask_pos_logits[mask_indices], mask_neg_logits[mask_indices]), dim=0)
-
-                        mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
-                        mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
-                        mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
-                        mask_loss = criterion(mask_logits, mask_labels)
-                        loss += mask_loss
-                else:
-                    if args.model_training == 'all_action':
-                        loss = criterion(pos_logits, pos_labels)
-                        loss += criterion(neg_logits, neg_labels)
-                    else:
+                    elif args.loss_type == 'ce_over':
+                        pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
                         indices = np.where(pos != 0)
                         loss = criterion(pos_logits[indices], pos_labels[indices]) 
                         loss += criterion(neg_logits[indices], neg_labels[indices])
+                        loss_all = 0
+                        for i in range(args.window_size):
+                            pos_labels, neg_labels = torch.ones(pos_logits_all[i].shape, device=args.device), torch.zeros(neg_logits_all[i].shape, device=args.device)
+                            indices = np.where(pos_all[:,:,i] != 0)
+                            logits = torch.cat((pos_logits_all[i][indices], neg_logits_all[i][indices]), dim=0)
+                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                            for j in range(1,len(neg_logits_all)):
+                                logits = torch.cat((logits, neg_logits_all[j][indices]), dim=0)
+                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                            loss_all += criterion(logits, labels)
+                        loss_all = loss_all.mean()  # avg over window size
+                        loss = loss + loss_all 
+                else:
+                    if args.loss_type == 'sampled_softmax':
+                        if (args.model_training == 'all_action' or args.model_training == 'future_rolling') and not args.uniform_ss:
+                            loss = criterion(pos_logits, neg_logits, neg_logQ)
+                        else:
+                            loss = 0
+                            for i in range(args.window_size):
+                                loss += criterion(pos_logits[i], neg_logits[i])
+                            loss = loss.mean()  # avg over window size 
+                        if args.masking:
+                            if args.temporal:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)
+                            else:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            mask_loss = criterion(mask_pos_logits, mask_neg_logits)
+                            loss += mask_loss
+                    elif args.loss_type == 'ce_over':
+                        loss = 0
+                        for i in range(args.window_size):
+                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                            indices = np.where(pos[:,:,i] != 0)
+                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                            for j in range(1,len(neg_logits)):
+                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                            loss += criterion(logits, labels)
+                        loss = loss.mean()  # avg over window size 
+                        # pos_size = len(pos_logits)
+                        # neg_size = len(neg_logits)
+                        # max_size = max(pos_size, neg_size)
+                        # for i in range(max_size):
+                        #     if i < pos_size:
+                        #         pos_labels = torch.ones(pos_logits[i].shape, device=args.device)
+                        #         indices = np.where(pos[:,:,i] != 0)
+                        #         pos_logits_i = pos_logits[i][indices]
+                        #         pos_labels_i = pos_labels[indices]
+                            
+                        #     if i < neg_size:
+                        #         neg_labels = torch.zeros(neg_logits[i].shape, device=args.device)
+                        #         neg_logits_i = neg_logits[i][indices]
+                        #         neg_labels_i = neg_labels[indices]
+
+                        #     logits = torch.cat((pos_logits_i, neg_logits_i), dim=0)
+                        #     labels = torch.cat((pos_labels_i, neg_labels_i), dim=0)
+
+                        #     for j in range(1, neg_size):
+                        #         if j != i:
+                        #             logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                        #             labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                                
+                        #     loss += criterion(logits, labels)
+
+                        # loss = loss.mean()  # avg over window size 
+                        
                         if args.masking:
                             mask_indices = np.where(mask == 1)
-                            mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            if args.temporal:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0], masked_time_seq, time_seq)
+                            else:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg[:,:,0])
+                            mask_logits = torch.cat((mask_pos_logits[mask_indices], mask_neg_logits[mask_indices]), dim=0)
+
                             mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
                             mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
-                            mask_loss = criterion(mask_pos_logits[mask_indices], mask_pos_labels[mask_indices])
-                            mask_loss += criterion(mask_neg_logits[mask_indices], mask_neg_labels[mask_indices])
+                            mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
+                            mask_loss = criterion(mask_logits, mask_labels)
                             loss += mask_loss
+                    else:
+                        if args.model_training == 'all_action':
+                            loss = criterion(pos_logits, pos_labels)
+                            loss += criterion(neg_logits, neg_labels)
+                        else:
+                            indices = np.where(pos != 0)
+                            loss = criterion(pos_logits[indices], pos_labels[indices]) 
+                            loss += criterion(neg_logits[indices], neg_labels[indices])
+                            if args.masking:
+                                mask_indices = np.where(mask == 1)
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                                mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
+                                mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
+                                mask_loss = criterion(mask_pos_logits[mask_indices], mask_pos_labels[mask_indices])
+                                mask_loss += criterion(mask_neg_logits[mask_indices], mask_neg_labels[mask_indices])
+                                loss += mask_loss
 
                 for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
                 loss.backward()
                 adam_optimizer.step()
                 print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
         
-        if epoch % 10 == 0:
+        if epoch % 50 == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
