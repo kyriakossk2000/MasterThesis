@@ -81,11 +81,17 @@ source /home/${STUDENT_ID}/miniconda3/bin/activate mscproject
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --strategy=autoregressive
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --strategy=teacher_forcing
 
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=combined --window_eval=true
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=false
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=combined --window_eval=true --strategy=autoregressive
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=combined --window_eval=true --strategy=teacher_forcing
+
 # masking
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --model_training=all_action --loss_type=ce_over --window_eval=true --window_size=7 --masking=true --mask_prob=0.25
 
 # TIME2VEC EXP
-python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --temporal=true  # AA + T2V CE
+python main.py --dataset=ml-20m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --temporal=true  # AA + T2V CE
 #python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --masking=true --temporal=true  # AA + T2V + MASK CE
 #python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --strategy=autoregressive --temporal=true  # AA + T2V + AR CE
 #python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=all_action --window_eval=true --strategy=teacher_forcing --temporal=true  # AA + T2V + TF CE
