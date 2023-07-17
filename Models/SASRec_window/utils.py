@@ -179,23 +179,38 @@ class WarpSamplerAll(object):
 def sample_function_combined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED, model_training, window_size, args):
     def sample():
         user = np.random.randint(1, usernum + 1)
-        while len(user_train[user]) <= 1 or len(user_input_seq[user]) <= 1:
+        while len(user_train[user]) <= 1 or len(user_input_seq[user]) <= 1: 
             user = np.random.randint(1, usernum + 1)
-
-        # next item prediction
-        seq = np.zeros([maxlen], dtype=np.int32)
-        pos = np.zeros([maxlen], dtype=np.int32)
-        neg = np.zeros([maxlen], dtype=np.int32)
-        nxt = user_train[user][-1]
-        idx = maxlen - 1
-        ts = set(user_train[user])
-        for i in reversed(user_train[user][:-1]):
-            seq[idx] = i
-            pos[idx] = nxt
-            if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
-            nxt = i
-            idx -= 1
-            if idx == -1: break
+        if args.data_partition == 'teacher_forcing':
+            train_seq = random.choice(user_train[user])
+            seq = np.zeros([maxlen], dtype=np.int32)
+            pos = np.zeros([maxlen], dtype=np.int32)
+            neg = np.zeros([maxlen], dtype=np.int32)
+            nxt = train_seq[-1]
+            idx = maxlen - 1
+            ts = set(train_seq)
+            for i in reversed(train_seq[:-1]):
+                seq[idx] = i
+                pos[idx] = nxt
+                if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
+                nxt = i
+                idx -= 1
+                if idx == -1: break
+        else:
+            # next item prediction
+            seq = np.zeros([maxlen], dtype=np.int32)
+            pos = np.zeros([maxlen], dtype=np.int32)
+            neg = np.zeros([maxlen], dtype=np.int32)
+            nxt = user_train[user][-1]
+            idx = maxlen - 1
+            ts = set(user_train[user])
+            for i in reversed(user_train[user][:-1]):
+                seq[idx] = i
+                pos[idx] = nxt
+                if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
+                nxt = i
+                idx -= 1
+                if idx == -1: break
 
         # all action prediction
         neg_samples = window_size
@@ -745,7 +760,7 @@ def data_partition_window_all_action_tf(fname, window_size=7, target_seq_percent
     User = defaultdict(list)
     user_input = {}
     user_target = {}
-    user_train = {}
+    user_train = defaultdict(list)
     user_train_seq = {}
     user_valid = {}
     user_test = {}
@@ -793,8 +808,7 @@ def data_partition_window_all_action_tf(fname, window_size=7, target_seq_percent
             temp_input = input_seq.copy()
             for single_target in target_seq:
                 temp_input.append(single_target)
-                index += 1
-                user_train[index] = temp_input.copy()
+                user_train[user].append(temp_input.copy())
 
             user_train_seq[user] = train_seq
 

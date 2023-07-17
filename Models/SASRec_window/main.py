@@ -101,7 +101,7 @@ if __name__ == '__main__':
             count = 0
             for key, seq in user_input.items():    # ALL action seq
                 print(f"User: {key},All action Train Sequence: {seq}")
-                print(f"Train Next item Sequence for user {key}: ", user_train_seq.get(key, []))
+                print(f"Train Next item Sequence for user {key}: ", user_train_seq[key])
                 print(f"Train Set for user {key}: ", user_train.get(key, []))  # train before split
                 print(f"Target Sequence for user {key}: ", user_target.get(key, []))
                 print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
