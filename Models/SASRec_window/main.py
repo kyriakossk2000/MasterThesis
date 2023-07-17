@@ -90,25 +90,42 @@ if __name__ == '__main__':
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
                 if count >= 3:  # Change this to print more or fewer sequences
-                    break
-            
+                    break    
             sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
     elif args.model_training == 'combined':
-        dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
-        [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
-        training_samples = user_train
-        print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
-        count = 0
-        for key, seq in user_input_seq.items():
-            print(f"User: {key},Train Sequence: {seq}")
-            print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
-            print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
-            print(f"Test for user {key}: ", user_test.get(key, []))
-            count += 1
-            if count >= 3:  # Change this to print more or fewer sequences
-                break
-        sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
+        if args.data_partition == 'teacher_forcing':
+            dataset = data_partition_window_all_action_tf(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+            [user_input, user_target, user_train_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+            training_samples = user_train
+            print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input.values())))
+            count = 0
+            for key, seq in user_input.items():    # ALL action seq
+                print(f"User: {key},All action Train Sequence: {seq}")
+                print(f"Train Next item Sequence for user {key}: ", user_train_seq.get(key, []))
+                print(f"Train Set for user {key}: ", user_train.get(key, []))  # train before split
+                print(f"Target Sequence for user {key}: ", user_target.get(key, []))
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Test for user {key}: ", user_test.get(key, []))
+                count += 1
+                if count >= 3:  # Change this to print more or fewer sequences
+                    break
+            sampler = WarpSamplerCombined(user_input, user_target, user_train_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
+        else:
+            dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+            [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+            training_samples = user_train
+            print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+            count = 0
+            for key, seq in user_input_seq.items():
+                print(f"User: {key},Train Sequence: {seq}")
+                print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
+                print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Test for user {key}: ", user_test.get(key, []))
+                count += 1
+                if count >= 3:  # Change this to print more or fewer sequences
+                    break
+            sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
     elif args.model_training == 'dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -382,6 +399,14 @@ if __name__ == '__main__':
                             loss = criterion_sim(pos_logits, neg_logits)
                             loss_all = criterion(pos_logits_all, neg_logits_all, neg_logQ_all)
                             loss = loss + loss_all
+                        if args.masking:
+                            if args.temporal:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)
+                            else:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            criterion_sim = SampledSoftmaxLoss()
+                            mask_loss = criterion_sim(mask_pos_logits, mask_neg_logits)
+                            loss += mask_loss
 
                     elif args.loss_type == 'ce_over':
                         pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
@@ -400,6 +425,20 @@ if __name__ == '__main__':
                             loss_all += criterion(logits, labels)
                         loss_all = loss_all.mean()  # avg over window size
                         loss = loss + loss_all 
+
+                        if args.masking:
+                            mask_indices = np.where(mask == 1)
+                            if args.temporal:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, time_seq)
+                            else:
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                            mask_logits = torch.cat((mask_pos_logits[mask_indices], mask_neg_logits[mask_indices]), dim=0)
+
+                            mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
+                            mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
+                            mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
+                            mask_loss = criterion(mask_logits, mask_labels)
+                            loss += mask_loss
                 else:
                     if args.loss_type == 'sampled_softmax':
                         if (args.model_training == 'all_action' or args.model_training == 'future_rolling') and not args.uniform_ss:

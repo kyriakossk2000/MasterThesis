@@ -30,7 +30,6 @@ def random_neq_all_uniform(l, r, s, count):
 
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
-
         user = np.random.randint(1, usernum + 1)
         while len(user_train[user]) <= 1: user = np.random.randint(1, usernum + 1)
 
@@ -739,6 +738,69 @@ def data_partition_window_all_action(fname, window_size=7, target_seq_percentage
 
     return [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum]
 
+
+def data_partition_window_all_action_tf(fname, window_size=7, target_seq_percentage=0.9):
+    usernum = 0
+    itemnum = 0
+    User = defaultdict(list)
+    user_input = {}
+    user_target = {}
+    user_train = {}
+    user_train_seq = {}
+    user_valid = {}
+    user_test = {}
+
+    f = open('data/%s.txt' % fname, 'r')
+    for line in f:
+        u, i = line.rstrip().split(' ')
+        u = int(u)
+        i = int(i)
+        usernum = max(u, usernum)
+        itemnum = max(i, itemnum)
+        User[u].append(i)
+    c = 0
+    index = 0
+    for user in User:
+        nfeedback = len(User[user])
+
+        if nfeedback < 3:
+            user_train[user] = User[user]
+            user_valid[user] = []
+            user_test[user] = []
+        else:
+            seq_len = len(User[user]) - 2
+            valid_index = int(seq_len * 0.8)
+            test_index = int(seq_len * 0.9)
+
+            train_seq = User[user][:valid_index]
+            valid_seq = User[user][valid_index:test_index]
+            test_seq = User[user][test_index:]
+
+            split_index = int(len(train_seq) * target_seq_percentage)
+            input_seq = train_seq[:split_index]
+            target_seq = train_seq[split_index:]
+            
+            if len(target_seq) < window_size:
+                num_needed = window_size - len(target_seq)  
+                additional_elements = random.sample(target_seq, min(num_needed, len(target_seq)))
+                target_seq.extend(additional_elements)
+            
+            user_input[user] = input_seq
+            user_target[user] = target_seq
+            user_valid[user] = valid_seq
+            user_test[user] = test_seq
+            
+            temp_input = input_seq.copy()
+            for single_target in target_seq:
+                temp_input.append(single_target)
+                index += 1
+                user_train[index] = temp_input.copy()
+
+            user_train_seq[user] = train_seq
+
+    return [user_input, user_target, user_train, user_train_seq, user_valid, user_test, usernum, itemnum]
+
+
 # -------- Partition with Window for Super, Dense all action and All action, but including temporal ---------- #
 def data_partition_window_all_action_temporal(fname, window_size=7, target_seq_percentage=0.9):
     train_start = target_seq_percentage
@@ -1078,7 +1140,10 @@ def evaluate_window_valid_time(model, dataset, args, k_future_pos=7, top_N=10):
 # Eval over window per step into the future 
 def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling' or args.model_training == 'combined':
-        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+        if args.data_partition == 'teacher_forcing' and args.model_training == 'combined':
+            [_, _, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+        else:
+            [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     elif args.data_partition == None or args.data_partition == 'None':
         [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     else:
@@ -1170,7 +1235,10 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
 
 def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling' or args.model_training == 'combined':
-        [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+        if args.data_partition == 'teacher_forcing' and args.model_training == 'combined':
+            [_, _, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
+        else:
+            [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)        
     elif args.data_partition == None or args.data_partition == 'None':
         [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
     else:

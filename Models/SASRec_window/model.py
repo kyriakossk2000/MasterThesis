@@ -158,10 +158,10 @@ class SASRec(torch.nn.Module):
             max_window_size = max(pos_size, neg_size)
         if self.model_training == 'combined':
             if pos_seqs.ndim == 3:
-                if not self.masking:
-                    pos_size = pos_seqs.shape[2]
-                    neg_size = neg_seqs.shape[2]
-                    max_window_size = max(pos_size, neg_size)
+                #if not self.masking:
+                pos_size = pos_seqs.shape[2]
+                neg_size = neg_seqs.shape[2]
+                max_window_size = max(pos_size, neg_size)
                 if self.loss_type == 'ce_over':
                     pos_logits_list = []
                     neg_logits_list = []
