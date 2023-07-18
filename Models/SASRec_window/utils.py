@@ -359,6 +359,109 @@ class WarpSamplerAllTemporal(object):
             p.terminate()
             p.join()
 
+def sample_function_all_temporal_combined(user_input_seq, user_target_seq, user_train, user_timestamp_input, user_timestamp_target, user_timestamp_train, usernum, itemnum, batch_size, maxlen, 
+                        result_queue, SEED, model_training, window_size, args):
+    def sample():
+        user = np.random.randint(1, usernum + 1)
+        while len(user_train[user]) <= 1 or len(user_input_seq[user]) <= 1: 
+            user = np.random.randint(1, usernum + 1)
+        # next item prediction
+        seq = np.zeros([maxlen], dtype=np.int32)
+        time_seq = np.zeros([maxlen], dtype=np.float32)  # timestamp sequence
+        pos = np.zeros([maxlen], dtype=np.int32)
+        pos_time = np.zeros([maxlen], dtype=np.float32)  # pos timestamp sequence
+        neg = np.zeros([maxlen], dtype=np.int32)
+        nxt = user_train[user][-1]
+        nxt_time = user_timestamp_train[user][-1]
+        idx = maxlen - 1
+        ts = set(user_train[user])
+        for i, t in reversed(list(zip(user_train[user][:-1], user_timestamp_train[user][:-1]))):
+            seq[idx] = i
+            time_seq[idx] = t
+            pos[idx] = nxt
+            pos_time[idx] = nxt_time
+            if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
+            nxt = i
+            nxt_time = t
+            idx -= 1
+            if idx == -1: break
+
+        # all action prediction
+        neg_samples = window_size
+        input_seq = user_input_seq[user]
+        input_time_seq = user_timestamp_input[user]
+        target_seq = user_target_seq[user]
+        target_time_seq = user_timestamp_target[user]
+        train_target_sampled = random.sample(target_seq, k=window_size) if len(target_seq) > window_size else random.choices(target_seq, k=window_size)
+        train_time_sampled = [target_time_seq[target_seq.index(item)] for item in train_target_sampled]
+        ts_all = set(input_seq + train_target_sampled)
+        pos_samples = window_size
+        seq_all = np.zeros([maxlen], dtype=np.int32)
+        time_seq_all = np.zeros([maxlen], dtype=np.float32)  # timestamp sequence
+        pos_all = np.zeros([maxlen, pos_samples], dtype=np.int32)
+        pos_time_all = np.zeros([maxlen, pos_samples], dtype=np.float32)  # pos_all timestamp sequence
+        neg_all = np.zeros([maxlen, neg_samples], dtype=np.int32)
+        idx = maxlen - 1
+        for i, t in reversed(list(zip(input_seq, input_time_seq))):
+            seq_all[idx] = i 
+            time_seq_all[idx] = t
+            if idx == maxlen - 1:
+                pos_all[idx] = train_target_sampled
+                pos_time_all[idx] = train_time_sampled
+                if args.uniform_ss:
+                    neg_all[idx] = random_neq_all_uniform(1, itemnum + 1, ts_all, neg_samples)
+                else:
+                    for j in range(neg_samples):
+                        neg_all[idx,j] = random_neq(1, itemnum + 1, ts_all)
+            idx -= 1
+            if idx == -1: break        
+
+        return user, seq, pos, neg, time_seq, pos_time, seq_all, pos_all, neg_all, time_seq_all, pos_time_all
+
+
+    np.random.seed(SEED)
+    while True:
+        one_batch = []
+        for i in range(batch_size):
+            one_batch.append(sample())
+
+        result_queue.put(zip(*one_batch))
+
+class WarpSamplerAllTemporalCombined(object):
+    def __init__(self, user_input, user_target, user_train, user_timestamp_input, user_timestamp_target, user_timestamp_train, usernum, itemnum, batch_size=64, maxlen=10, 
+                 n_workers=1, model_training='all_action', window_size=7, args=None):
+        self.result_queue = Queue(maxsize=n_workers * 10)
+        self.processors = []
+        for i in range(n_workers):
+            self.processors.append(
+                Process(target=sample_function_all_temporal_combined, args=(user_input,
+                                                        user_target,
+                                                        user_train,
+                                                        user_timestamp_input,
+                                                        user_timestamp_target,
+                                                        user_timestamp_train,
+                                                        usernum,
+                                                        itemnum,
+                                                        batch_size,
+                                                        maxlen,
+                                                        self.result_queue,
+                                                        np.random.randint(2e9),
+                                                        model_training,
+                                                        window_size,
+                                                        args,
+                                                        )))
+            self.processors[-1].daemon = True
+            self.processors[-1].start()
+    
+    def next_batch(self):
+        return self.result_queue.get()
+
+    def close(self):
+        for p in self.processors:
+            p.terminate()
+            p.join()
+
+
 def sample_function_rolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size, maxlen, result_queue, SEED, window_size=7, args=None):
     def sample():
         user = np.random.randint(1, usernum + 1)

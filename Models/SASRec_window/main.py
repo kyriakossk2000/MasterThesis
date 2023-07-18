@@ -68,7 +68,7 @@ if __name__ == '__main__':
             count = 0
             for key, seq in user_input.items():
                 print(f"User: {key},Train Sequence: {seq}")
-                print(f"Target Sequence for user {key}: ", user_input.get(key, []))
+                print(f"Target Sequence for user {key}: ", user_target.get(key, []))
                 print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 print(f"Temporal target Sequence for user {key}: ", user_timestamp_target.get(key, []))
@@ -111,21 +111,41 @@ if __name__ == '__main__':
                     break
             sampler = WarpSamplerCombined(user_input, user_target, user_train_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
         else:
-            dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
-            [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
-            training_samples = user_train
-            print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
-            count = 0
-            for key, seq in user_input_seq.items():
-                print(f"User: {key},Train Sequence: {seq}")
-                print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
-                print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
-                print(f"Test for user {key}: ", user_test.get(key, []))
-                count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
-                    break
-            sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
+            if args.temporal:
+                dataset = data_partition_window_all_action_temporal(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+                [user_input, user_target, user_train, user_valid, user_test, usernum, itemnum, 
+                user_timestamp_input, user_timestamp_target, user_timestamp_train, user_timestamp_valid, user_timestamp_test] = dataset
+                training_samples = user_input
+                print("All action split with Temporal:" + "\n" +"Number of training sequences in train set: " + str(len(user_input.values())) + " Num. of timesteps: " + str(len(user_timestamp_input.values())))
+                count = 0
+                for key, seq in user_input.items():
+                    print(f"User: {key},All action Train Sequence: {seq}")
+                    print(f"Target Sequence for user {key}: ", user_target.get(key, []))
+                    print(f"Next item train seq for user {key}: ", user_train.get(key, []))
+                    print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                    print(f"Test for user {key}: ", user_test.get(key, []))
+                    print(f"Temporal target Sequence for user {key}: ", user_timestamp_target.get(key, []))
+                    print(f"Valid for timesteps {key}: ", user_timestamp_valid.get(key, []))
+                    count += 1
+                    if count >= 3:  # Change this to print more or fewer sequences
+                        break
+                sampler = WarpSamplerAllTemporalCombined(user_input, user_target, user_train, user_timestamp_input, user_timestamp_target, user_timestamp_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)            
+            else:
+                dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
+                [user_input_seq, user_target_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
+                training_samples = user_train
+                print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input_seq.values())))
+                count = 0
+                for key, seq in user_input_seq.items():
+                    print(f"User: {key},Train Sequence: {seq}")
+                    print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
+                    print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
+                    print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                    print(f"Test for user {key}: ", user_test.get(key, []))
+                    count += 1
+                    if count >= 3:  # Change this to print more or fewer sequences
+                        break
+                sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
     elif args.model_training == 'dense_all_action':
         dataset = data_partition_window_all_action(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
@@ -322,8 +342,12 @@ if __name__ == '__main__':
         if args.inference_only: break # just to decrease identition
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
             if args.temporal:
-                u, seq, pos, neg, time_seq, pos_time = sampler.next_batch() # tuples to ndarray
-                u, seq, pos, neg, time_seq, pos_time = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(time_seq), np.array(pos_time) 
+                if args.model_training == 'combined':
+                    u, seq, pos, neg, time_seq, pos_time, seq_all, pos_all, neg_all, time_seq_all, pos_time_all = sampler.next_batch()
+                    u, seq, pos, neg, time_seq, pos_time, seq_all, pos_all, neg_all, time_seq_all, pos_time_all = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(time_seq), np.array(pos_time), np.array(seq_all), np.array(pos_all), np.array(neg_all), np.array(time_seq_all), np.array(pos_time_all)
+                else:
+                    u, seq, pos, neg, time_seq, pos_time = sampler.next_batch() # tuples to ndarray
+                    u, seq, pos, neg, time_seq, pos_time = np.array(u), np.array(seq), np.array(pos), np.array(neg), np.array(time_seq), np.array(pos_time) 
             else:
                 if args.model_training == 'combined':
                     u, seq, pos, neg, seq_all, pos_all, neg_all = sampler.next_batch() # tuples to ndarray
@@ -339,7 +363,11 @@ if __name__ == '__main__':
 
             if not args.uniform_ss and args.loss_type == 'sampled_softmax':
                 if args.temporal:
-                    pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg, time_seq, pos_time)
+                    if args.model_training == 'combined':
+                        pos_logits, neg_logits = model(u, seq, pos, neg, time_seq, pos_time)
+                        pos_logits_all, neg_logits_all, neg_logQ_all = model(u, seq_all, pos_all, neg_all, time_seq_all, pos_time_all)
+                    else:
+                        pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg, time_seq, pos_time)
                 else:
                     if args.model_training == 'combined':
                         pos_logits, neg_logits = model(u, seq, pos, neg)
@@ -349,6 +377,8 @@ if __name__ == '__main__':
             else:
                 if args.temporal:
                     pos_logits, neg_logits = model(u, seq, pos, neg, time_seq, pos_time)
+                    if args.model_training == 'combined':
+                        pos_logits_all, neg_logits_all = model(u, seq_all, pos_all, neg_all, time_seq_all, pos_time_all)
                 else:
                     pos_logits, neg_logits = model(u, seq, pos, neg)
                     if args.model_training == 'combined':
