@@ -1581,3 +1581,91 @@ def evaluate_window_over_all_valid(model, dataset, args, k_future_pos=7, top_N=1
     print('\nValid users:', valid_user)
 
     return NDCG, HT, avg_kendall_tau
+
+
+
+def evaluate_window_soa_test(model, dataset, args, k_future_pos=7, top_N=10):
+    [train, valid, test, usernum, itemnum] = dataset
+    NDCG = [0.0] * k_future_pos
+    HT = [0.0] * k_future_pos
+    SEQUENCE_SCORE = [0.0] * k_future_pos
+    HT_ORDERED_SCORE = [0.0] * k_future_pos
+
+    weight_ht, weight_ordering = 0.5, 0.5
+    valid_user = 0.0
+    count = 0
+
+    if usernum > 10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    tau_scores = []
+    
+    for u in users:
+        if len(train[u]) < 1 or len(test[u]) < k_future_pos: continue
+        count += 1
+        
+        seq = np.zeros([args.maxlen], dtype=np.int32)
+        idx = args.maxlen - 1
+        for i in reversed(train[u] + valid[u]):
+            seq[idx] = i
+            idx -= 1
+            if idx == -1: break
+
+        rated = set(train[u] + valid[u])
+        rated.add(0)
+
+        pi_ri_pairs = []
+
+        for j in range(k_future_pos):
+            item_indices = [test[u][j]]
+            for _ in range(99):
+                t = np.random.randint(1, itemnum + 1)
+                while t in rated: t = np.random.randint(1, itemnum + 1)
+                item_indices.append(t)
+
+            predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
+            predictions = predictions[0]
+            
+            ranks = predictions.argsort().argsort()
+            rank = ranks[0].item()
+
+            # Form (p_i, r_i) pairs
+            pi_ri_pairs.append((j+1, rank+1))
+
+            if rank < top_N:
+                seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
+                SEQUENCE_SCORE[j] += seq_score
+                NDCG[j] += 1 / np.log2(rank + 2)
+                HT[j] += 1
+        
+        true_positions, predicted_rankings = zip(*pi_ri_pairs)
+        if count < 5:
+            print("True positions: ", true_positions)
+            print("Predicted rankings: ", predicted_rankings)
+
+        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        if not math.isnan(tau):
+            tau_scores.append(tau)
+    
+        valid_user += 1
+        if valid_user % 100 == 0:
+            print('.', end="")
+            sys.stdout.flush()
+      
+
+    # avveraging for each position
+    NDCG = [score / valid_user for score in NDCG]
+    HT = [score / valid_user for score in HT]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
+    avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
+
+    print('count: ', count)
+    ndcg_avg = statistics.mean(NDCG)
+    ht_avg = statistics.mean(HT)
+    sequence_score_avg = statistics.mean(SEQUENCE_SCORE)
+    ht_ordered_score_avg = statistics.mean(HT_ORDERED_SCORE)
+
+    return NDCG, HT, SEQUENCE_SCORE, HT_ORDERED_SCORE, ndcg_avg, ht_avg, sequence_score_avg, ht_ordered_score_avg, avg_kendall_tau
