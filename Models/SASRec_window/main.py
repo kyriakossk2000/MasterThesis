@@ -434,7 +434,7 @@ if __name__ == '__main__':
                                 mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)
                             else:
                                 mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
-                            criterion_sim = torch.nn.NLLLoss()
+                            criterion_sim = torch.nn.CrossEntropyLoss()
                             mask_loss = criterion_sim(mask_pos_logits, mask_neg_logits)
                             loss += mask_loss
 
@@ -467,8 +467,7 @@ if __name__ == '__main__':
                             mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
                             mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
                             mask_labels = torch.cat((mask_pos_labels[mask_indices], mask_neg_labels[mask_indices]), dim=0)
-                            criterion_mask = torch.nn.NLLLoss(mask_logits, mask_labels)
-                            mask_loss = criterion_mask(mask_logits, mask_labels)
+                            mask_loss = criterion(mask_logits, mask_labels)
                             loss += mask_loss
                 else:
                     if args.loss_type == 'sampled_softmax':
