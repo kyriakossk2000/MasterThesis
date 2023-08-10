@@ -40,5 +40,5 @@ Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intr
   organization={IEEE}
 }
 ```
-Model base code (before all changes), is adepoted from:
+Model base code (before all changes), is adopted from:
 https://github.com/pmixer/SASRec.pytorch
