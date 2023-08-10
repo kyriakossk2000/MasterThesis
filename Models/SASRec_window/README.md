@@ -6,7 +6,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 ```
 --- 
 
-To Run model for window-based predictor with Integrated All Action prediction + Teacher Forcing Strategy with Sampled Softmax Uniform Loss:
+To Run model for window-based predictor with Integrated All Action prediction + Teacher Forcing technique with Sampled Softmax Uniform Loss:
 
 ```
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --strategy=teacher_forcing
