@@ -1,6 +1,5 @@
 # MSc AI Thesis
-## University of Edinburgh
-## 2023
+## University of Edinburgh - 2023
 Research thesis on sequential recommender systems that predict users' future behaviors
 
 ## Structure:
