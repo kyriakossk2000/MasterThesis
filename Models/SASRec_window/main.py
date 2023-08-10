@@ -33,7 +33,7 @@ parser.add_argument('--window_eval', default=False, type=str2bool)          # wi
 parser.add_argument('--window_eval_size', default=7, type=int)              # evaluate in the k position in the future 
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
-parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
+parser.add_argument('--optimizer', default='adam', type=str)                # optimizer  TODO SAM
 parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
 parser.add_argument('--strategy', default='default', type=str)              # training strategy
 parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
@@ -386,7 +386,7 @@ if __name__ == '__main__':
 
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
-            if args.optimizer == 'sam':
+            if args.optimizer == 'sam':   #TODO NOT FINISHED
                 sam_optimizer.zero_grad()
                 if args.model_training == 'all_action':
                     indices = -1
