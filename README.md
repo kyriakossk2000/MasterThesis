@@ -5,4 +5,4 @@ Research thesis on sequential recommender systems that predict users' future beh
 ## Structure:
 - Dataset Analysis - EDA on datasets
 - IPP - Project Proposal Report
-- Models - Models used. SASRec_window main folder for future predictions proposed model
+- Models - Models used. SASRec_window main folder for future predictions-proposed model
