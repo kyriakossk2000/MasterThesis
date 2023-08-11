@@ -1,25 +1,37 @@
-To Run model for window-based predictor with Integrated All Action prediction:
+To Run model for window-based predictor with Integrated All Action prediction with BCE:
 
 ```
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=ce_over --window_eval=true --window_size=7
 
 ```
 --- 
+To Run model for window-based predictor with Integrated All Action prediction with Sampled Softmax Uniform loss: 
+```
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=sampled_softmax --uniform_ss=true --window_eval=true --window_size=7
+```
 
+---
+To Run model for window-based predictor with Integrated All Action prediction with Sampled Softmax Uniform loss: 
+```
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=sampled_softmax --uniform_ss=false --window_eval=true --window_size=7
+```
+
+---
 To Run model for window-based predictor with Integrated All Action prediction + Teacher Forcing technique with Sampled Softmax Uniform Loss:
 
 ```
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --strategy=teacher_forcing
-
-
 ```
 --- 
+To Run model for window-based predictior with Baseline Next-item prediction - BCE:
+```
+python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=bce --model_training=None --window_eval=true --uniform_ss=false --window_size=7
+```
 
+--- 
 To Run model without window:
-
 ```
 python main.py --device=cuda --dataset=ml-1m --train_dir=default --inference_only=false --maxlen=200
-
 ```
 
 ---
