@@ -1109,7 +1109,7 @@ def evaluate_window_time(model, dataset, args, k_future_pos=7, top_N=10):
         rated = set(train[u] + valid[u])
         rated.add(0)
 
-        pi_ri_pairs = []
+        model_predictions = []
 
         for j in range(k_future_pos):
             item_indices = [test[u][j]]
@@ -1120,11 +1120,10 @@ def evaluate_window_time(model, dataset, args, k_future_pos=7, top_N=10):
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices, [time_seq]]])
             predictions = predictions[0]
             
+            model_predictions.append(item_indices[predictions.argsort()[0]])
+            
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
-
-            # Form (p_i, r_i) pairs
-            pi_ri_pairs.append((j+1, rank+1))
 
             if rank < top_N:
                 seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
@@ -1132,12 +1131,10 @@ def evaluate_window_time(model, dataset, args, k_future_pos=7, top_N=10):
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
         
-        true_positions, predicted_rankings = zip(*pi_ri_pairs)
         if count < 5:
-            print("True positions: ", true_positions)
-            print("Predicted rankings: ", predicted_rankings)
-
-        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+            print("True items: ", test[u][:k_future_pos])
+            print("Predicted items: ", model_predictions)
+        tau, _ = kendalltau(test[u][:k_future_pos], model_predictions, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
     
@@ -1201,7 +1198,7 @@ def evaluate_window_valid_time(model, dataset, args, k_future_pos=7, top_N=10):
         rated = set(train[u])
         rated.add(0)
 
-        pi_ri_pairs = []
+        model_predictions = []
 
         for j in range(k_future_pos):
             item_indices = [valid[u][j]]
@@ -1212,11 +1209,10 @@ def evaluate_window_valid_time(model, dataset, args, k_future_pos=7, top_N=10):
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices, [time_seq]]])
             predictions = predictions[0]
             
+            model_predictions.append(item_indices[predictions.argsort()[0]])
+            
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
-
-            # Form (p_i, r_i) pairs
-            pi_ri_pairs.append((j+1, rank+1))
 
             if rank < top_N:
                 seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
@@ -1224,12 +1220,10 @@ def evaluate_window_valid_time(model, dataset, args, k_future_pos=7, top_N=10):
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
         
-        true_positions, predicted_rankings = zip(*pi_ri_pairs)
         if count < 5:
-            print("True positions: ", true_positions)
-            print("Predicted rankings: ", predicted_rankings)
-
-        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+            print("True items: ", test[u][:k_future_pos])
+            print("Predicted items: ", model_predictions)
+        tau, _ = kendalltau(test[u][:k_future_pos], model_predictions, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
     
@@ -1296,7 +1290,7 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
         rated = set(train[u] + valid[u])
         rated.add(0)
 
-        pi_ri_pairs = []
+        model_predictions = []
 
         for j in range(k_future_pos):
             item_indices = [test[u][j]]
@@ -1308,24 +1302,21 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
             predictions = predictions[0]
             
+            model_predictions.append(item_indices[predictions.argsort()[0]])
+            
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
-
-            # Form (p_i, r_i) pairs
-            pi_ri_pairs.append((j+1, rank+1))
 
             if rank < top_N:
                 seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
                 SEQUENCE_SCORE[j] += seq_score
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
-        
-        true_positions, predicted_rankings = zip(*pi_ri_pairs)
-        if count < 5:
-            print("True positions: ", true_positions)
-            print("Predicted rankings: ", predicted_rankings)
 
-        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        if count < 5:
+            print("True items: ", test[u][:k_future_pos])
+            print("Predicted items: ", model_predictions)
+        tau, _ = kendalltau(test[u][:k_future_pos], model_predictions, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
     
@@ -1391,7 +1382,7 @@ def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
         rated = set(train[u])
         rated.add(0)
 
-        pi_ri_pairs = []
+        model_predictions = []
 
         for j in range(k_future_pos):
             item_indices = [valid[u][j]]
@@ -1403,29 +1394,29 @@ def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
             predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_indices]])
             predictions = predictions[0]
             
+            model_predictions.append(item_indices[predictions.argsort()[0]])
+            
             ranks = predictions.argsort().argsort()
             rank = ranks[0].item()
-
-            # Form (p_i, r_i) pairs
-            pi_ri_pairs.append((j+1, rank+1))
 
             if rank < top_N:
                 seq_score = (k_future_pos - abs(j - rank)) / k_future_pos
                 SEQUENCE_SCORE[j] += seq_score
                 NDCG[j] += 1 / np.log2(rank + 2)
                 HT[j] += 1
-        
-        true_positions, predicted_rankings = zip(*pi_ri_pairs)
 
-        tau, _ = kendalltau(true_positions, predicted_rankings, variant='b')
+        if count < 5:
+            print("True items: ", test[u][:k_future_pos])
+            print("Predicted items: ", model_predictions)
+        tau, _ = kendalltau(test[u][:k_future_pos], model_predictions, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
-
+    
         valid_user += 1
         if valid_user % 100 == 0:
             print('.', end="")
             sys.stdout.flush()
-
+      
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
     SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
