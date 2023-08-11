@@ -480,7 +480,10 @@ if __name__ == '__main__':
                                     loss += criterion(pos_logits[i], neg_logits[i])
                                 loss = loss.mean()  # avg over window size 
                             else:
-                                loss = criterion(pos_logits, neg_logits)
+                                loss = 0
+                                for i in range(args.window_size):
+                                    loss += criterion(pos_logits[i], neg_logits[i])
+                                loss = loss.mean()  # avg over window size 
                         if args.masking:
                             if args.temporal:
                                 mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg, masked_time_seq, pos_time)

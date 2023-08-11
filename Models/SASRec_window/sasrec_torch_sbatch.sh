@@ -37,7 +37,7 @@ export DATASET_DIR=${TMP}/datasets/
 
 # First Exp:
 #base
-python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=bce --model_training=None --window_eval=true --uniform_ss=false --window_size=7
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=bce --model_training=None --window_eval=true --uniform_ss=false --window_size=7
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=None --window_eval=true --uniform_ss=true --window_size=7
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=None --window_eval=true --uniform_ss=false --window_size=7
 
@@ -71,7 +71,24 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=sampled_softmax --uniform_ss=true --window_eval=true --window_size=7
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=sampled_softmax --uniform_ss=false --window_eval=true --window_size=7
 
+# Second Exp:
 
+# T2V
+#python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=ce_over --model_training=combined --window_eval=true --uniform_ss=false --window_size=7  --temporal=true
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --window_size=7 --temporal=true
 
+# AR
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=ce_over --model_training=combined --window_eval=true --uniform_ss=false --strategy=autoregressive --window_size=7
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --strategy=autoregressive --window_size=7
 
+# TF
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=ce_over --model_training=combined --window_eval=true --uniform_ss=false --strategy=teacher_forcing --window_size=7
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --strategy=teacher_forcing --window_size=7
+
+# masking
 #python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=ce_over --model_training=combined --window_eval=true --uniform_ss=false --masking=true
+#python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --masking=true
+
+# TF + T2V
+#python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=ce_over --model_training=combined --window_eval=true --uniform_ss=false --strategy=teacher_forcing --window_size=7 --temporal=true
+#python main.py --dataset=ml-1m_time --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --loss_type=sampled_softmax --model_training=combined --window_eval=true --uniform_ss=true --strategy=teacher_forcing --window_size=7 --temporal=true

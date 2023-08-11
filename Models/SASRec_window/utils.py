@@ -1406,9 +1406,9 @@ def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
                 HT[j] += 1
 
         if count < 5:
-            print("True items: ", test[u][:k_future_pos])
+            print("True items: ", valid[u][:k_future_pos])
             print("Predicted items: ", model_predictions)
-        tau, _ = kendalltau(test[u][:k_future_pos], model_predictions, variant='b')
+        tau, _ = kendalltau(valid[u][:k_future_pos], model_predictions, variant='b')
         if not math.isnan(tau):
             tau_scores.append(tau)
     
