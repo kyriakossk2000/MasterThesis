@@ -11,7 +11,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 ```
 
 ---
-To Run model for window-based predictor with Integrated All Action prediction with Sampled Softmax Uniform loss: 
+To Run model for window-based predictor with Integrated All Action prediction with Sampled Softmax LogQ correction: 
 ```
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda  --model_training=combined --loss_type=sampled_softmax --uniform_ss=false --window_eval=true --window_size=7
 ```
