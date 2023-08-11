@@ -1144,7 +1144,7 @@ def evaluate_window_time(model, dataset, args, k_future_pos=7, top_N=10):
             sys.stdout.flush()
       
 
-    # avveraging for each position
+    # averaging for each position
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
     SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
