@@ -1,8 +1,13 @@
-# MSc Artificial Intelligence Thesis, University of Edinburgh - 2023
-Research thesis on sequential recommender systems that predict users' future behaviors.
-~By Kyriakos Kyriakou
+# MSc AI Thesis, University of Edinburgh, 2023
+## Title: Recommender Systems: Looking further into the future 
+## Author: Kyriakos Kyriakou
+## Abstract: 
+Recommender systems play a crucial role in various sectors, from entertainment apps to e-commerce platforms, by offering personalized recommendations based on users' preferences and historical interactions. However, many of these systems primarily focus on predicting the immediate next action of users, potentially missing out on complex patterns in users' behaviors. This thesis presents an in-depth exploration of sequential recommendation systems, with the primary goal of improving the prediction of future user interactions. The research expands upon the work of Pancha et al. (2022), offering a divergent approach by focusing on the sequential order of future interactions, rather than their explicit temporal context. Using the SASRec model as a foundation, we introduce several training objectives and techniques, and evaluate their effectiveness on the widely-used MovieLens-1M dataset.
+Our findings reveal that our Integrated All Action Prediction modeling approach, combined with the Sampled Softmax Uniform loss, outperforms other methods in predicting future user interactions. This hybrid approach integrates the strengths of both Next Item Prediction and long-term future All Action Prediction, achieving superior performance across several key metrics, including NDCG@10, Hit@10, and Kendall's Tau.
+The study also investigates the impact of various training techniques and the size of future prediction windows. Among these, Teacher Forcing particularly stands out for its proficiency in predicting a well-ordered sequence of future items. Additionally, extending the future prediction window size indicates potential long-term benefits in recommendation accuracy.
+Despite the significant contributions of this research, it opens new avenues for future work. These findings offer valuable insights and pave the way for the development of more effective and robust sequential recommendation systems.
 
-## Structure:
+## Repository Structure:
 - Dataset Analysis - EDA on datasets
 - IPP - Project Proposal Report
 - Models - Models used. SASRec_window main folder for future predictions-proposed model.
