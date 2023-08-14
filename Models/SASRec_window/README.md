@@ -128,11 +128,11 @@ Time2Vec base codeadopted from: [Time2Vec-PyTorch repo](https://github.com/ojus1
 
 ```
 @misc{kazemi2019time2vec,
-    title={Time2Vec: Learning a Vector Representation of Time}, 
-    author={Seyed Mehran Kazemi and Rishab Goel and Sepehr Eghbali and Janahan Ramanan and Jaspreet Sahota and Sanjay Thakur and Stella Wu and Cathal Smyth and Pascal Poupart and Marcus Brubaker},
-    year={2019},
-    eprint={1907.05321},
-    archivePrefix={arXiv},
-    primaryClass={cs.LG}
+  title={Time2Vec: Learning a Vector Representation of Time}, 
+  author={Seyed Mehran Kazemi and Rishab Goel and Sepehr Eghbali and Janahan Ramanan and Jaspreet Sahota and Sanjay Thakur and Stella Wu and Cathal Smyth and Pascal Poupart and Marcus Brubaker},
+  year={2019},
+  eprint={1907.05321},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
 }
 ```
