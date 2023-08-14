@@ -122,7 +122,7 @@ Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intr
   organization={IEEE}
 }
 ```
-<br/><br/>
+
 For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representation of Time`.
 Time2Vec base codeadopted from: [Time2Vec-PyTorch repo](https://github.com/ojus1/Time2Vec-PyTorch). Here is paper bib:
 
