@@ -405,17 +405,10 @@ class SASRec(torch.nn.Module):
             pos_sample_embeddings = self.item_emb(pos_seqs_as_tensor)
             neg_sample_embeddings = self.item_emb(neg_seqs_as_tensor)
 
-            if self.model_training == 'dense_all_action':
+            log_feats_expanded = log_feats.unsqueeze(2)
+            pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)
+            neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
 
-                log_feats_expanded = log_feats.unsqueeze(2)
-
-                pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)                
-
-                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1)
-            elif self.model_training == 'super_dense_all_action':
-                log_feats_expanded = log_feats.unsqueeze(2)
-                pos_logits = (log_feats_expanded * pos_sample_embeddings).sum(dim=-1)
-                neg_logits = (log_feats_expanded * neg_sample_embeddings).sum(dim=-1) 
         elif self.model_training == 'future_rolling':
 
             pos_logits_list = []

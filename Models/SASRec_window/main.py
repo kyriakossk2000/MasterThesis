@@ -49,14 +49,17 @@ with open(os.path.join(args.dataset + '_' + args.train_dir, 'args.txt'), 'w') as
 f.close()
 
 if __name__ == '__main__':
-    print("Model training: ", args.model_training)
-    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling':
+    if args.data_partition == 'skip' or args.data_partition == 'incremental':
+        print("Model training: ", args.data_partition)
+    else:
+        print("Model training: ", args.model_training)
+    if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling' or args.model_training == 'combined':
         print("Training strategy: ", args.strategy)
         pass
-    else:
-        print("Data partition: ", args.data_partition)
     if args.masking:
-        print("Masking with perc: ", args.mask_prob)
+        print("Masking with perc:", args.mask_prob)
+    print("Window Size Training:", args.window_size)
+    print("Window Size Evaluation:", args.window_eval_size)
     # load dataset
     if args.model_training == 'all_action':
         if args.temporal: 
@@ -93,7 +96,7 @@ if __name__ == '__main__':
                     break    
             sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
     elif args.model_training == 'combined':
-        if args.data_partition == 'teacher_forcing':
+        if args.data_partition == 'incremental':
             dataset = data_partition_window_all_action_tf(args.dataset, window_size=args.window_size, target_seq_percentage=0.9)
             [user_input, user_target, user_train_seq, user_train, user_valid, user_test, usernum, itemnum] = dataset
             training_samples = user_train
@@ -194,11 +197,11 @@ if __name__ == '__main__':
         sampler = WarpSamplerRolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, window_size=args.window_size, args=args)
         
     else:  # SASRec next item
-        if args.data_partition == 'independent':
+        if args.data_partition == 'skip':
             dataset = data_partition_window_independent(args.dataset, target_seq_percentage=0.9)
             [train_seq, user_train, user_valid, user_test, usernum, itemnum, train_samples] = dataset
             training_samples = train_seq
-            print("Independent split:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
+            print("Skip Item Training:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
             count = 0
             for key, seq in train_seq.items():
                 print(f"User: {key}, Sequence: {seq}")
@@ -208,11 +211,11 @@ if __name__ == '__main__':
                 if count >= 3:  # Change this to print more or fewer sequences
                     break
             sampler = WarpSampler(train_seq, train_samples, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
-        elif args.data_partition == 'teacher_forcing':
+        elif args.data_partition == 'incremental':
             dataset = data_partition_window_teacher_forcing(args.dataset, target_seq_percentage=0.9)
             [train_seq, user_train, user_valid, user_test, usernum, itemnum, train_samples] = dataset
             training_samples = train_seq
-            print("Teacher forcing split:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
+            print("Incremental Item Training:" + "\n" +"Number of training sequences in train set: " + str(len(train_seq.values())))
             count = 0
             for key, seq in train_seq.items():
                 print(f"User: {key}, Sequence: {seq}")
@@ -311,7 +314,7 @@ if __name__ == '__main__':
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     if args.loss_type == 'sampled_softmax':
-        if not args.uniform_ss:
+        if not args.uniform_ss and (args.model_training not in ['None', 'dense_all_action', 'super_dense_all_action']):
             criterion = SampledSoftmaxLossOver()
         else:
             criterion = SampledSoftmaxLoss()
@@ -373,7 +376,10 @@ if __name__ == '__main__':
                         pos_logits, neg_logits = model(u, seq, pos, neg)
                         pos_logits_all, neg_logits_all, neg_logQ_all = model(u, seq_all, pos_all, neg_all)
                     else:
-                        pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
+                        if args.model_training == 'None' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+                            pos_logits, neg_logits = model(u, seq, pos, neg)
+                        else:
+                            pos_logits, neg_logits, neg_logQ = model(u, seq, pos, neg)
             else:
                 if args.temporal:
                     pos_logits, neg_logits = model(u, seq, pos, neg, time_seq, pos_time)
@@ -479,6 +485,8 @@ if __name__ == '__main__':
                                 for i in range(args.window_size):
                                     loss += criterion(pos_logits[i], neg_logits[i])
                                 loss = loss.mean()  # avg over window size 
+                            elif args.model_training == 'None' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+                                loss = criterion(pos_logits, neg_logits)
                             else:
                                 loss = 0
                                 for i in range(args.window_size):
@@ -492,43 +500,31 @@ if __name__ == '__main__':
                             mask_loss = criterion(mask_pos_logits, mask_neg_logits)
                             loss += mask_loss
                     elif args.loss_type == 'ce_over':
-                        loss = 0
-                        for i in range(args.window_size):
-                            pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
-                            indices = np.where(pos[:,:,i] != 0)
-                            logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
-                            labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
-                            for j in range(1,len(neg_logits)):
-                                logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                                labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                            loss += criterion(logits, labels)
-                        loss = loss.mean()  # avg over window size 
-                        # pos_size = len(pos_logits)
-                        # neg_size = len(neg_logits)
-                        # max_size = max(pos_size, neg_size)
-                        # for i in range(max_size):
-                        #     if i < pos_size:
-                        #         pos_labels = torch.ones(pos_logits[i].shape, device=args.device)
-                        #         indices = np.where(pos[:,:,i] != 0)
-                        #         pos_logits_i = pos_logits[i][indices]
-                        #         pos_labels_i = pos_labels[indices]
-                            
-                        #     if i < neg_size:
-                        #         neg_labels = torch.zeros(neg_logits[i].shape, device=args.device)
-                        #         neg_logits_i = neg_logits[i][indices]
-                        #         neg_labels_i = neg_labels[indices]
-
-                        #     logits = torch.cat((pos_logits_i, neg_logits_i), dim=0)
-                        #     labels = torch.cat((pos_labels_i, neg_labels_i), dim=0)
-
-                        #     for j in range(1, neg_size):
-                        #         if j != i:
-                        #             logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
-                        #             labels = torch.cat((labels, neg_labels[indices]), dim=0)
-                                
-                        #     loss += criterion(logits, labels)
-
-                        # loss = loss.mean()  # avg over window size 
+                        if args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action':
+                            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
+                            indices = np.where(pos != 0)
+                            loss = criterion(pos_logits[indices], pos_labels[indices]) 
+                            loss += criterion(neg_logits[indices], neg_labels[indices])
+                            if args.masking:
+                                mask_indices = np.where(mask == 1)
+                                mask_pos_logits, mask_neg_logits = model(u, masked_seq, seq, neg)
+                                mask_pos_labels = torch.ones(mask_pos_logits.shape, device=args.device)
+                                mask_neg_labels = torch.zeros(mask_neg_logits.shape, device=args.device)
+                                mask_loss = criterion(mask_pos_logits[mask_indices], mask_pos_labels[mask_indices])
+                                mask_loss += criterion(mask_neg_logits[mask_indices], mask_neg_labels[mask_indices])
+                                loss += mask_loss
+                        else:
+                            loss = 0
+                            for i in range(args.window_size):
+                                pos_labels, neg_labels = torch.ones(pos_logits[i].shape, device=args.device), torch.zeros(neg_logits[i].shape, device=args.device)
+                                indices = np.where(pos[:,:,i] != 0)
+                                logits = torch.cat((pos_logits[i][indices], neg_logits[i][indices]), dim=0)
+                                labels = torch.cat((pos_labels[indices], neg_labels[indices]), dim=0)
+                                for j in range(1,len(neg_logits)):
+                                    logits = torch.cat((logits, neg_logits[j][indices]), dim=0)
+                                    labels = torch.cat((labels, neg_labels[indices]), dim=0)
+                                loss += criterion(logits, labels)
+                            loss = loss.mean()  # avg over window size 
                         
                         if args.masking:
                             mask_indices = np.where(mask == 1)

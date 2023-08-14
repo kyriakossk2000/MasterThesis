@@ -181,7 +181,7 @@ def sample_function_combined(user_input_seq, user_target_seq, user_train, usernu
         user = np.random.randint(1, usernum + 1)
         while len(user_train[user]) <= 1 or len(user_input_seq[user]) <= 1: 
             user = np.random.randint(1, usernum + 1)
-        if args.data_partition == 'teacher_forcing':
+        if args.data_partition == 'incremental':
             train_seq = random.choice(user_train[user])
             seq = np.zeros([maxlen], dtype=np.int32)
             pos = np.zeros([maxlen], dtype=np.int32)
@@ -1251,7 +1251,7 @@ def evaluate_window_valid_time(model, dataset, args, k_future_pos=7, top_N=10):
 # Eval over window per step into the future 
 def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling' or args.model_training == 'combined':
-        if args.data_partition == 'teacher_forcing' and args.model_training == 'combined':
+        if args.data_partition == 'incremental' and args.model_training == 'combined':
             [_, _, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
         else:
             [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
@@ -1343,7 +1343,7 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
 
 def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
     if args.model_training == 'all_action' or args.model_training == 'dense_all_action' or args.model_training == 'super_dense_all_action' or args.model_training == 'future_rolling' or args.model_training == 'combined':
-        if args.data_partition == 'teacher_forcing' and args.model_training == 'combined':
+        if args.data_partition == 'incremental' and args.model_training == 'combined':
             [_, _, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
         else:
             [_, _, train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)        
