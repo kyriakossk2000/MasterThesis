@@ -3,7 +3,6 @@ import time
 from sampled_softmax import SampledSoftmaxLoss, SampledSoftmaxLossOver
 import torch
 import argparse
-from sam_optimizer.sam import SAM
 
 from model import SASRec, SASRecT2V
 from utils import *
@@ -33,7 +32,7 @@ parser.add_argument('--window_eval', default=False, type=str2bool)          # wi
 parser.add_argument('--window_eval_size', default=7, type=int)              # evaluate in the k position in the future 
 parser.add_argument('--data_partition', default=None, type=str)             # type of data partition split -> independent, None (next item), teacher forcing, or autoregressive? 
 parser.add_argument('--model_training', default=None, type=str)             # None is next item (SASRec), all action, or dense all action
-parser.add_argument('--optimizer', default='adam', type=str)                # optimizer  TODO SAM
+parser.add_argument('--optimizer', default='adam', type=str)                # optimizer
 parser.add_argument('--loss_type', default='bce', type=str)                 # loss function
 parser.add_argument('--strategy', default='default', type=str)              # training strategy
 parser.add_argument('--masking', default=False, type=str2bool)              # masking or not
@@ -329,11 +328,8 @@ if __name__ == '__main__':
     else:
         print('Loss type: ', args.loss_type)
 
-    if args.optimizer == 'sam':
-        base_optimizer = torch.optim.Adam
-        sam_optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr)
-    else:
-        adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
+    
+    adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
     
     T = 0.0
     if args.masking:
@@ -392,33 +388,9 @@ if __name__ == '__main__':
 
             if args.loss_type != 'ce_over' and not ((args.model_training == 'all_action' or args.model_training == 'future_rolling') and args.loss_type == 'sampled_softmax'):
                 pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
-            if args.optimizer == 'sam':   #TODO NOT FINISHED
-                sam_optimizer.zero_grad()
-                if args.model_training == 'all_action':
-                    indices = -1
-                    loss = criterion(pos_logits, pos_labels)
-                    loss += criterion(neg_logits, neg_labels)
-                else:
-                    indices = np.where(pos != 0)
-                    loss = criterion(pos_logits[indices], pos_labels[indices])
-                    loss += criterion(neg_logits[indices], neg_labels[indices])
-                for param in model.item_emb.parameters():
-                    loss += args.l2_emb * torch.norm(param)
-                loss.backward(retain_graph=True)
-                sam_optimizer.first_step(zero_grad=True)
-                # Second forward-backward pass
-                if args.model_training == 'all_action':
-                    loss = criterion(pos_logits, pos_labels)
-                    loss += criterion(neg_logits, neg_labels)
-                else:
-                    loss = criterion(pos_logits[indices], pos_labels[indices])
-                    loss += criterion(neg_logits[indices], neg_labels[indices])
-                
-                for param in model.item_emb.parameters():
-                    loss += args.l2_emb * torch.norm(param)
-                loss.backward()
-                sam_optimizer.second_step(zero_grad=True)
-                print('SAMM')
+            if args.optimizer == 'sam':   #TODO NOT FINISHED SAM OPTIMIZER
+                pass
+                print('SAM')
             else:
                 adam_optimizer.zero_grad()
                 if args.model_training == 'combined':
