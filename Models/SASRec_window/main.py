@@ -88,10 +88,10 @@ if __name__ == '__main__':
             for key, seq in user_input_seq.items():
                 print(f"User: {key},Train Sequence: {seq}")
                 print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
+                if count >= 3: 
                     break    
             sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
     elif args.model_training == 'combined':
@@ -101,15 +101,15 @@ if __name__ == '__main__':
             training_samples = user_train
             print("Combined model split:" + "\n" +"Number of training sequences in train set: " + str(len(user_input.values())))
             count = 0
-            for key, seq in user_input.items():    # ALL action seq
+            for key, seq in user_input.items():  
                 print(f"User: {key},All action Train Sequence: {seq}")
                 print(f"Train Next item Sequence for user {key}: ", user_train_seq[key])
                 print(f"Train Set for user {key}: ", user_train.get(key, []))  # train before split
                 print(f"Target Sequence for user {key}: ", user_target.get(key, []))
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Valid for user {key}: ", user_valid.get(key, [])) 
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
+                if count >= 3: 
                     break
             sampler = WarpSamplerCombined(user_input, user_target, user_train_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
         else:
@@ -124,12 +124,12 @@ if __name__ == '__main__':
                     print(f"User: {key},All action Train Sequence: {seq}")
                     print(f"Target Sequence for user {key}: ", user_target.get(key, []))
                     print(f"Next item train seq for user {key}: ", user_train.get(key, []))
-                    print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                    print(f"Valid for user {key}: ", user_valid.get(key, []))  
                     print(f"Test for user {key}: ", user_test.get(key, []))
                     print(f"Temporal target Sequence for user {key}: ", user_timestamp_target.get(key, []))
                     print(f"Valid for timesteps {key}: ", user_timestamp_valid.get(key, []))
                     count += 1
-                    if count >= 3:  # Change this to print more or fewer sequences
+                    if count >= 3:  
                         break
                 sampler = WarpSamplerAllTemporalCombined(user_input, user_target, user_train, user_timestamp_input, user_timestamp_target, user_timestamp_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)            
             else:
@@ -142,10 +142,10 @@ if __name__ == '__main__':
                     print(f"User: {key},Train Sequence: {seq}")
                     print(f"Train Next item Sequence for user {key}: ", user_train.get(key, []))
                     print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-                    print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                    print(f"Valid for user {key}: ", user_valid.get(key, []))  
                     print(f"Test for user {key}: ", user_test.get(key, []))
                     count += 1
-                    if count >= 3:  # Change this to print more or fewer sequences
+                    if count >= 3:  
                         break
                 sampler = WarpSamplerCombined(user_input_seq, user_target_seq, user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
 
@@ -158,10 +158,10 @@ if __name__ == '__main__':
         for key, seq in user_input_seq.items():
             print(f"User: {key},Train Sequence: {seq}")
             print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  
             print(f"Test for user {key}: ", user_test.get(key, []))
             count += 1
-            if count >= 3:  # Change this to print more or fewer sequences
+            if count >= 3:  
                 break
         sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)
     elif args.model_training == 'super_dense_all_action':
@@ -173,10 +173,10 @@ if __name__ == '__main__':
         for key, seq in user_input_seq.items():
             print(f"User: {key},Train Sequence: {seq}")
             print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  
             print(f"Test for user {key}: ", user_test.get(key, []))
             count += 1
-            if count >= 3:  # Change this to print more or fewer sequences
+            if count >= 3:  
                 break
         sampler = WarpSamplerAll(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, model_training=args.model_training, window_size=args.window_size, args=args)    
     elif args.model_training == 'future_rolling':
@@ -188,10 +188,10 @@ if __name__ == '__main__':
         for key, seq in user_input_seq.items():
             print(f"User: {key},Train Sequence: {seq}")
             print(f"Target Sequence for user {key}: ", user_target_seq.get(key, []))
-            print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+            print(f"Valid for user {key}: ", user_valid.get(key, []))  
             print(f"Test for user {key}: ", user_test.get(key, []))
             count += 1
-            if count >= 3:  # Change this to print more or fewer sequences
+            if count >= 3:  
                 break
         sampler = WarpSamplerRolling(user_input_seq, user_target_seq, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3, window_size=args.window_size, args=args)
         
@@ -204,10 +204,10 @@ if __name__ == '__main__':
             count = 0
             for key, seq in train_seq.items():
                 print(f"User: {key}, Sequence: {seq}")
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
+                if count >= 3:  
                     break
             sampler = WarpSampler(train_seq, train_samples, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
         elif args.data_partition == 'incremental':
@@ -218,10 +218,10 @@ if __name__ == '__main__':
             count = 0
             for key, seq in train_seq.items():
                 print(f"User: {key}, Sequence: {seq}")
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
+                if count >= 3:  
                     break
             sampler = WarpSampler(train_seq, train_samples, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
         else:
@@ -233,14 +233,14 @@ if __name__ == '__main__':
             count = 0
             for key, seq in user_train.items():
                 print(f"User: {key}, Sequence: {seq}")
-                print(f"Valid for user {key}: ", user_valid.get(key, []))  # Print validation and test data for a specific user
+                print(f"Valid for user {key}: ", user_valid.get(key, []))  
                 print(f"Test for user {key}: ", user_test.get(key, []))
                 count += 1
-                if count >= 3:  # Change this to print more or fewer sequences
+                if count >= 3:  
                     break
             sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
 
-    num_batch = len(training_samples) // args.batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
+    num_batch = len(training_samples) // args.batch_size
     cc = 0.0
     for u in training_samples:
         cc += len(training_samples[u])

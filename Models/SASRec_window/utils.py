@@ -17,7 +17,6 @@ def random_neq(l, r, s):
     return t
 
 # sampler for batch generation for all action and dense all action
-# TODO this method here could use uniform negative sampling 
 def random_neq_all(l, r, s, count):
     possible_numbers = list(set(range(l, r)) - set(s))
     np.random.shuffle(possible_numbers)
