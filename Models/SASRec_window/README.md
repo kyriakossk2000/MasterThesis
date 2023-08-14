@@ -107,9 +107,9 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 - The experiments aim to address specific research questions and are designed to build upon the findings of the previous ones.
 - Evaluation metrics include Hit Rate@10, NDCG@10, and Kendall's Tau (as detailed in Section `3.4 Evaluation Process`).
 
-
+## References
 Modified based on [paper author's tensorflow implementation](https://github.com/kang205/SASRec), switching to PyTorch(v1.6) for simplicity.
-
+Model base code (before all changes) adopted from: [SASRec-PyTorch repo](https://github.com/pmixer/SASRec.pytorch)
 Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intro and more complete README, and here's paper bib:
 
 ```
@@ -122,10 +122,9 @@ Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intr
   organization={IEEE}
 }
 ```
-Model base code (before all changes) adopted from:
-https://github.com/pmixer/SASRec.pytorch
-
-For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representation of Time`, here's paper bib:
+<br/><br/>
+For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representation of Time`.
+Time2Vec base codeadopted from: [Time2Vec-PyTorch repo](https://github.com/ojus1/Time2Vec-PyTorch). Here is paper bib:
 
 ```
 @misc{kazemi2019time2vec,
@@ -137,5 +136,3 @@ For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representa
     primaryClass={cs.LG}
 }
 ```
-Time2Vec base code adopted from:
-https://github.com/ojus1/Time2Vec-PyTorch
