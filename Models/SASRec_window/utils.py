@@ -1326,9 +1326,9 @@ def evaluate_window(model, dataset, args, k_future_pos=7, top_N=10):
       
 
     # averaging for each position
-    NDCG = [score / valid_user for score in NDCG]
+    NDCG = [score / valid_user for score in NDCG]        
     HT = [score / valid_user for score in HT]
-    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]    # Sequence Score and HT_ordered are novel metrics, that decided to be left out of the project
     HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
     avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 
@@ -1418,7 +1418,7 @@ def evaluate_valid_window(model, dataset, args, k_future_pos=7, top_N=10):
       
     NDCG = [score / valid_user for score in NDCG]
     HT = [score / valid_user for score in HT]
-    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]
+    SEQUENCE_SCORE = [score / valid_user for score in SEQUENCE_SCORE]   # Sequence Score and HT_ordered are novel metrics, that decided to be left out of the project
     HT_ORDERED_SCORE = [weight_ht * HT[i] + weight_ordering * SEQUENCE_SCORE[i] for i in range(k_future_pos)]
     avg_kendall_tau = sum(tau_scores) / len(tau_scores) if tau_scores else 0
 

@@ -296,7 +296,7 @@ if __name__ == '__main__':
             print('Evaluation statistics when evaluating for each k-step into the future: ')
             print("NDCG@10 Test Average: %.4f" % ndcg_avg)
             print("HR@10 Test Average: %.4f" % ht_avg)
-            print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)
+            print("Sequence_Score@10 Test Average: %.4f" % sequence_score_avg)  # Sequence Score and HT_ordered are novel metrics, that decided to be left out of the project
             print("HT_Ordered@10 Test Average: %.4f" % ht_ordered_score_avg)
             print("Kendall's Tau Average: %.4f" % t_test_kendall_avg)
             print('{:<15}{:<10}{:<10}{:<10}{:<10}'.format("Position in future", "Test_NDCG", "Test_HR", "Test_Sequence_Score", "Test_HT_Ordered_Score"))
@@ -567,7 +567,7 @@ if __name__ == '__main__':
                 # print("HR@10 Valid Average: %.4f" % over_all_HR_valid)
                 # print("Kendall's Tau Average: %.4f" % over_allKendall_valid)
                 # print('\n')
-                print('Evaluation statistics when evaluating for each k-step into the future: ')
+                print('Evaluation statistics when evaluating for each k-step into the future: ')  # Sequence Score and HT_ordered are novel metrics, that decided to be left out of the project
                 print("Test" + '\n')
                 print("NDCG@10 Test Average: %.4f" % ndcg_avg)
                 print("HR@10 Test Average: %.4f" % ht_avg)
