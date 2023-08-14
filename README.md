@@ -123,7 +123,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 
 ### References
 Model modified based on [paper author's tensorflow implementation](https://github.com/kang205/SASRec), switching to PyTorch(v1.6) for simplicity.
-Model base code (before all changes) adopted from: [SASRec-PyTorch repo](https://github.com/pmixer/SASRec.pytorch)
+Model base code (before all changes) adopted from: [SASRec-PyTorch repo](https://github.com/pmixer/SASRec.pytorch). 
 Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intro and more complete README, and here's paper bib:
 
 ```
@@ -137,7 +137,7 @@ Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intr
 }
 ```
 
-For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representation of Time`.
+For Time2Vec implementation check paper: `Time2Vec: Learning a Vector representation of Time`. 
 Time2Vec base code adopted from: [Time2Vec-PyTorch repo](https://github.com/ojus1/Time2Vec-PyTorch). Here is paper bib:
 
 ```
