@@ -13,7 +13,7 @@ Despite the significant contributions of this research, it opens new avenues for
 - Models - Models used. SASRec_window main folder for future predictions-proposed model.
 - Dissertation Report
 
-## Window-Based Recommender System - SASRec_window folder README
+## Window-Based Recommender System - SASRec_window folder README:
 ### Data
 
 The data used in this project is stored in the `data` folder and consists of two datasets:
