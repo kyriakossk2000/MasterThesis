@@ -8,17 +8,19 @@ The study also investigates the impact of various training techniques and the si
 Despite the significant contributions of this research, it opens new avenues for future work. These findings offer valuable insights and pave the way for the development of more effective and robust sequential recommendation systems.
 
 ## Repository Structure:
-- Dataset Analysis - EDA on datasets
-- IPP - Project Proposal Report
+- Dataset Analysis - EDA on dataset
+- IPP - Informatics Project Proposal Report
 - Models - Models used. SASRec_window main folder for future predictions-proposed model.
+- Dissertation Report
 
-## Data
+## Window-Based Recommender System - SASRec_window folder README
+### Data
 
 The data used in this project is stored in the `data` folder and consists of two datasets:
 - `ml-1m.txt`: The main dataset for model training and evaluation.
 - `ml-1m_time.txt`: An extended dataset that includes temporal information, specifically used with Time2Vec.
 
-## Code Organization
+### Code Organization
 
 The `SASRec_window` directory comprises various scripts and notebooks essential for the experiments:
 
@@ -28,9 +30,9 @@ The `SASRec_window` directory comprises various scripts and notebooks essential 
 4. **graphs.py**: A script used to generate graphs for the third experiment. (Note: Results are manually hard-coded, so it won't generate all window graphs by default.)
 5. **MovieLens_1M_Analysis.ipynb**: Jupyter notebook used for Exploratory Data Analysis (EDA) on the MovieLens 1M dataset.
 
-## Experiments
+### Experiments
 
-### 1. First Experiment: Performance of Training Objectives
+#### 1. First Experiment: Performance of Training Objectives
 Commands to run the first experiment:
 
 ```bash
@@ -75,7 +77,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --model_training=combined --loss_type=sampled_softmax --uniform_ss=false --window_eval=true --window_size=7
 ```
 
-### 2. Second Experiment: Effects of Training Techniques and Temporal Information
+#### 2. Second Experiment: Effects of Training Techniques and Temporal Information
 Commands to run the second experiment:
 
 ```bash
@@ -101,7 +103,7 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --data_partition=None --loss_type=sampled_softmax --model_training=combined --strategy=teacher_forcing --window_eval=true --uniform_ss=true --masking=true
 ```
 
-### 3. Third Experiment: Impact of Different Window Sizes
+#### 3. Third Experiment: Impact of Different Window Sizes
 Commands to run the third experiment:
 
 ```bash
@@ -114,12 +116,12 @@ python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0
 python main.py --dataset=ml-1m --train_dir=default --maxlen=200 --dropout_rate=0.2 --device=cuda --model_training=combined --loss_type=sampled_softmax --uniform_ss=true --window_eval=true --window_size=14 --window_eval_size=14
 ```
 
-## Notes
+### Notes
 - For a detailed understanding of the arguments passed in the commands, refer to the respective Python files.
 - The experiments aim to address specific research questions and are designed to build upon the findings of the previous ones.
 - Evaluation metrics include Hit Rate@10, NDCG@10, and Kendall's Tau (as detailed in Section `3.4 Evaluation Process`).
 
-## References
+### References
 Model modified based on [paper author's tensorflow implementation](https://github.com/kang205/SASRec), switching to PyTorch(v1.6) for simplicity.
 Model base code (before all changes) adopted from: [SASRec-PyTorch repo](https://github.com/pmixer/SASRec.pytorch)
 Check paper author's [repo](https://github.com/kang205/SASRec) for detailed intro and more complete README, and here's paper bib:
