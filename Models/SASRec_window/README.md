@@ -15,6 +15,8 @@ The `SASRec_window` directory comprises various scripts and notebooks essential 
 3. **utils.py**: Houses utility functions such as evaluation methods, data partitioning methods, and sampling methods.
 4. **graphs.py**: A script used to generate graphs for the third experiment. (Note: Results are manually hard-coded, so it won't generate all window graphs by default.)
 5. **MovieLens_1M_Analysis.ipynb**: Jupyter notebook used for Exploratory Data Analysis (EDA) on the MovieLens 1M dataset.
+6. **sampled_softmax.py**: Contains the Sampled Softmax Loss implementation.
+
 
 ## Experiments
 
@@ -134,5 +136,17 @@ Time2Vec base code adopted from: [Time2Vec-PyTorch repo](https://github.com/ojus
   eprint={1907.05321},
   archivePrefix={arXiv},
   primaryClass={cs.LG}
+}
+```
+
+For Sampled Softmax implementation check paper: `PinnerFormer: Sequence Modeling for User Representation at Pinterest`. The `sampled_softmax.py` loss implementation is an attempt of reproducing their loss. Here is paper bib:
+
+ ```
+@inproceedings{pancha2022pinnerformer,
+  title={PinnerFormer: Sequence Modeling for User Representation at Pinterest},
+  author={Pancha, Nikil and Zhai, Andrew and Leskovec, Jure and Rosenberg, Charles},
+  booktitle={Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  pages={3702--3712},
+  year={2022}
 }
 ```
