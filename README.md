@@ -11,7 +11,7 @@ Despite the significant contributions of this research, it opens new avenues for
 - Dataset Analysis - EDA on dataset
 - IPP - Informatics Project Proposal Report
 - Models - Models used. SASRec_window main folder for future predictions-proposed model.
-- Dissertation Report
+- Thesis Report
 
 ## Window-Based Recommender System - SASRec_window folder README:
 ### Data
